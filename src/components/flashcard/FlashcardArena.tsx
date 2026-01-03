@@ -9,10 +9,12 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  Loader2,
 } from "lucide-react";
 import type { QuestionCategory, Question, SM2Quality } from "@/types";
 import { QUALITY_BUTTONS } from "@/types";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
+import { getNextStudyCard, answerFlashcard } from "@/actions/flashcard.actions";
 
 interface FlashcardArenaProps {
   category: QuestionCategory;
@@ -20,54 +22,125 @@ interface FlashcardArenaProps {
 
 export function FlashcardArena({ category }: FlashcardArenaProps) {
   const [isFlipped, setIsFlipped] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentCard, setCurrentCard] = useState<{
+    question: Question;
+    isNew: boolean;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sessionComplete, setSessionComplete] = useState(false);
+  const [cardCount, setCardCount] = useState(0);
+  const [startTime, setStartTime] = useState<number>(Date.now());
 
-  // TODO: Fetch questions from database
+  // Load initial card
   useEffect(() => {
-    // Simulated loading
-    setIsLoading(false);
-    setQuestions([]);
+    loadNextCard();
   }, [category]);
+
+  const loadNextCard = async () => {
+    setIsLoading(true);
+    setError(null);
+    setIsFlipped(false);
+
+    try {
+      const result = await getNextStudyCard(category);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      if (!result.data) {
+        setSessionComplete(true);
+        return;
+      }
+
+      setCurrentCard({
+        question: result.data.question,
+        isNew: result.data.isNew,
+      });
+      setStartTime(Date.now());
+      setCardCount((prev) => prev + 1);
+    } catch (err) {
+      setError("Failed to load card. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
   };
 
-  const handleRating = (quality: SM2Quality) => {
-    // TODO: Update SM-2 state and move to next card
-    console.log("Rating:", quality);
-    setIsFlipped(false);
-    setCurrentIndex((prev) => prev + 1);
+  const handleRating = async (quality: SM2Quality) => {
+    if (!currentCard || isSubmitting) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const responseTime = Date.now() - startTime;
+      const formData = new FormData();
+      formData.append("questionId", currentCard.question.id);
+      formData.append("quality", quality.toString());
+      formData.append("responseTimeMs", responseTime.toString());
+      formData.append("wasRevealed", isFlipped.toString());
+
+      const result = await answerFlashcard(formData);
+
+      if (!result.success) {
+        setError(result.error);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Load next card
+      await loadNextCard();
+    } catch (err) {
+      setError("Failed to save answer. Please try again.");
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const currentQuestion = questions[currentIndex];
+  const handleRestart = () => {
+    setSessionComplete(false);
+    setCardCount(0);
+    loadNextCard();
+  };
 
-  if (isLoading) {
+  if (isLoading && !currentCard) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full"></div>
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading your study session...</p>
+        </div>
       </div>
     );
   }
 
-  if (questions.length === 0) {
+  if (error && !currentCard) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <RotateCcw className="w-8 h-8 text-muted-foreground" />
+        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+          <span className="text-3xl">⚠️</span>
         </div>
-        <h2 className="text-xl font-semibold mb-2">No Cards to Study</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">
-          There are no cards due for review in this category. Check back later
-          or try another category.
-        </p>
+        <h2 className="text-xl font-semibold mb-2">Error Loading Cards</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">{error}</p>
+        <button
+          onClick={loadNextCard}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
 
-  if (currentIndex >= questions.length) {
+  if (sessionComplete) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
         <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
@@ -75,17 +148,36 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
         </div>
         <h2 className="text-xl font-semibold mb-2">Session Complete!</h2>
         <p className="text-muted-foreground mb-6">
-          You&apos;ve reviewed all {questions.length} cards in this session.
+          You&apos;ve reviewed all available cards in this category. Great work!
         </p>
-        <button
-          onClick={() => {
-            setCurrentIndex(0);
-            setIsFlipped(false);
-          }}
-          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          Study Again
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={handleRestart}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Study Again
+          </button>
+          <a
+            href="/flashcards"
+            className="px-4 py-2 rounded-lg border hover:bg-accent transition-colors"
+          >
+            Choose Another Category
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentCard) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <RotateCcw className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-semibold mb-2">No Cards Available</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">
+          There are no cards to study in this category right now.
+        </p>
       </div>
     );
   }
@@ -95,70 +187,76 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
       {/* Progress */}
       <div className="mb-6">
         <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-          <span>
-            Card {currentIndex + 1} of {questions.length}
+          <span>Card {cardCount}</span>
+          <span
+            className={currentCard.isNew ? "text-green-600 font-medium" : ""}
+          >
+            {currentCard.isNew ? "New Card" : "Review"}
           </span>
-          <span>
-            {Math.round((currentIndex / questions.length) * 100)}% complete
-          </span>
-        </div>
-        <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${(currentIndex / questions.length) * 100}%` }}
-          />
         </div>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Flashcard Wrapper */}
       {/* Flashcard */}
       <div
-        className={`flashcard min-h-[400px] cursor-pointer ${
-          isFlipped ? "flipped" : ""
-        }`}
-        onClick={handleFlip}
+        className={`flashcard w-full max-w-2xl mx-auto relative ${
+          isSubmitting ? "pointer-events-none opacity-50" : "cursor-pointer"
+        } ${isFlipped ? "flipped" : ""}`}
+        onClick={isSubmitting ? undefined : handleFlip}
       >
         <div className="flashcard-inner">
           {/* Front - Question */}
-          <div className="flashcard-front p-8 rounded-xl border bg-card shadow-sm">
-            <div className="flex items-center justify-between mb-6">
+          <div className="flashcard-front p-8 rounded-xl border bg-card shadow-sm flex flex-col min-h-[250px]">
+            <div className="flex items-center justify-between mb-6 shrink-0">
               <span
                 className={`text-xs px-2 py-1 rounded-full ${getDifficultyClass(
-                  currentQuestion?.difficulty
+                  currentCard.question.difficulty
                 )}`}
               >
-                {currentQuestion?.difficulty}
+                {currentCard.question.difficulty}
               </span>
               <span className="text-xs text-muted-foreground">
-                Click to reveal answer
+                Click to reveal
               </span>
             </div>
-            <h2 className="text-xl font-medium leading-relaxed">
-              {currentQuestion?.question}
-            </h2>
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            <div className="flex-1 flex items-center justify-center">
+              <h2 className="text-xl font-medium leading-relaxed text-center">
+                {currentCard.question.question}
+              </h2>
+            </div>
+            <div className="mt-4 flex justify-center shrink-0">
               <Eye className="w-5 h-5 text-muted-foreground" />
             </div>
           </div>
 
           {/* Back - Answer */}
-          <div className="flashcard-back p-8 rounded-xl border bg-card shadow-sm overflow-auto">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flashcard-back p-8 rounded-xl border bg-card shadow-sm flex flex-col min-h-[450px] max-h-[70vh]">
+            <div className="flex items-center justify-between mb-4 shrink-0">
               <span className="text-sm font-medium">Answer</span>
               <EyeOff className="w-4 h-4 text-muted-foreground" />
             </div>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <MarkdownRenderer content={currentQuestion?.answer || ""} />
+            <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <MarkdownRenderer content={currentCard.question.answer || ""} />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Rating Buttons - Only show when flipped */}
-      {isFlipped && (
+      {isFlipped && !isSubmitting && (
         <div className="mt-6 flex justify-center gap-3">
           <RatingButton
             label="Again"
-            sublabel="<1min"
+            sublabel="Soon"
             onClick={() => handleRating(QUALITY_BUTTONS.AGAIN)}
             variant="again"
           />
@@ -183,34 +281,14 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="mt-6 flex items-center justify-between">
-        <button
-          onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
-          disabled={currentIndex === 0}
-          className="p-2 rounded-lg hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => {
-            setIsFlipped(false);
-            setCurrentIndex(currentIndex + 1);
-          }}
-          className="px-4 py-2 rounded-lg border hover:bg-accent transition-colors"
-        >
-          Skip
-        </button>
-        <button
-          onClick={() =>
-            setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))
-          }
-          disabled={currentIndex === questions.length - 1}
-          className="p-2 rounded-lg hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
+      {isSubmitting && (
+        <div className="mt-6 flex justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm">Saving...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

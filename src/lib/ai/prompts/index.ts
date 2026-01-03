@@ -2,7 +2,7 @@
 
 /**
  * AI System Prompts for Kimi K2 Integration
- * 
+ *
  * These prompts define the behavior of the AI in different contexts:
  * - Interview simulation
  * - Question generation
@@ -102,7 +102,9 @@ export function createInterviewerPrompt(context: {
   }
 
   if (context.previousQuestions?.length) {
-    prompt += `\n\nQuestions already asked (avoid repeating):\n${context.previousQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
+    prompt += `\n\nQuestions already asked (avoid repeating):\n${context.previousQuestions
+      .map((q, i) => `${i + 1}. ${q}`)
+      .join("\n")}`;
   }
 
   return prompt;
@@ -121,7 +123,7 @@ export function createEvaluationPrompt(
 Question: ${question}
 
 Expected key points to cover:
-${expectedKeyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+${expectedKeyPoints.map((p, i) => `${i + 1}. ${p}`).join("\n")}
 
 Candidate's answer:
 ${candidateAnswer}

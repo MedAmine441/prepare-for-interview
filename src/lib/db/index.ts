@@ -1,82 +1,71 @@
-// src/types/index.ts
+// src/lib/db/index.ts
+
+import { join } from "path";
+import { Low } from "lowdb";
+import { JSONFile } from "lowdb/node";
+import type { DatabaseSchema } from "./schema";
+import { DEFAULT_DATABASE, isValidDatabaseSchema } from "./schema";
 
 /**
- * Central type exports for FrontMaster
- * Import from '@/types' for cleaner imports
+ * Database file path - uses data/db.json relative to project root
  */
+const DB_PATH = join(process.cwd(), "data", "db.json");
 
-// Question domain
-export type {
-  QuestionId,
-  CategoryId,
-  QuestionCategory,
-  CategoryMetadata,
-  Difficulty,
-  QuestionSource,
-  Question,
-  CreateQuestionInput,
-  UpdateQuestionInput,
-  QuestionWithMeta,
-  QuestionFilters,
-  QuestionSortField,
-  SortDirection,
-  QuestionSortOptions,
-} from './question.types';
+/**
+ * Singleton database instance
+ */
+let db: Low<DatabaseSchema> | null = null;
 
-export {
-  QUESTION_CATEGORIES,
-  createQuestionId,
-  createCategoryId,
-} from './question.types';
+/**
+ * Get or create the database instance
+ * This ensures we only have one database connection throughout the app
+ */
+export async function getDatabase(): Promise<Low<DatabaseSchema>> {
+  if (db) {
+    return db;
+  }
 
-// Progress domain (SM-2)
-export type {
-  ProgressId,
-  EaseFactor,
-  SM2Quality,
-  QualityButton,
-  SM2State,
-  QuestionProgress,
-  ReviewRecord,
-  RecordReviewInput,
-  SM2CalculationResult,
-  StudySessionStats,
-  DueCards,
-  CategoryProgress,
-  ProgressDashboard,
-} from './progress.types';
+  // Create adapter
+  const adapter = new JSONFile<DatabaseSchema>(DB_PATH);
 
-export {
-  SM2_QUALITY,
-  SM2_QUALITY_LABELS,
-  QUALITY_BUTTONS,
-  DEFAULT_SM2_STATE,
-  createProgressId,
-  createEaseFactor,
-} from './progress.types';
+  // Initialize database
+  db = new Low<DatabaseSchema>(adapter, DEFAULT_DATABASE);
 
-// Interview domain
-export type {
-  SessionId,
-  MessageId,
-  SessionStatus,
-  InterviewMode,
-  MessageRole,
-  ContentType,
-  ChatMessage,
-  InterviewConfig,
-  InterviewSession,
-  StartSessionInput,
-  SendMessageInput,
-  InterviewerResponse,
-  AnswerFeedback,
-  SessionSummary,
-  StreamingState,
-  ChatInputState,
-} from './interview.types';
+  // Read from file
+  await db.read();
 
-export {
-  DEFAULT_INTERVIEW_CONFIG,
-  createSessionId,
-  createMessageId,
-} from './interview.types';
+  // Only initialize if data is null or invalid structure
+  // Don't reset if it's just empty arrays (that's valid!)
+  if (!db.data) {
+    console.log("No database found, initializing new database...");
+    db.data = DEFAULT_DATABASE;
+    await db.write();
+  } else if (!isValidDatabaseSchema(db.data)) {
+    console.warn("Invalid database structure detected, resetting...");
+    db.data = DEFAULT_DATABASE;
+    await db.write();
+  }
+  // If data exists and is valid, don't touch it even if arrays are empty
+
+  return db;
+}
+
+/**
+ * Write database to disk
+ * Helper function to ensure consistent write operations
+ */
+export async function writeDatabase(
+  database: Low<DatabaseSchema>
+): Promise<void> {
+  await database.write();
+}
+
+/**
+ * Reset database to default state
+ * WARNING: This will delete all data
+ */
+export async function resetDatabase(): Promise<void> {
+  const database = await getDatabase();
+  database.data = DEFAULT_DATABASE;
+  await database.write();
+}

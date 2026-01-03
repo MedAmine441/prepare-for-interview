@@ -26,7 +26,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
-    
+
     /* Category colors */
     --category-system-design: 217 91% 60%;
     --category-caching: 142 71% 45%;
@@ -72,62 +72,85 @@
 }
 
 @layer components {
-  /* Flashcard flip animation */
+  /* Final Stable Flashcard Flip */
   .flashcard {
-    perspective: 1000px;
+    perspective: 2000px;
+    position: relative;
+    width: 100%;
   }
-  
+
   .flashcard-inner {
     position: relative;
     width: 100%;
-    height: 100%;
-    transition: transform 0.6s;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     transform-style: preserve-3d;
+    /* This height allows the container to respect the taller back side */
+    min-height: 450px;
   }
-  
+
   .flashcard.flipped .flashcard-inner {
     transform: rotateY(180deg);
   }
-  
+
   .flashcard-front,
   .flashcard-back {
     position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
-  
+
+  /* Ensure front is visible and back is rotated */
+  .flashcard-front {
+    z-index: 2;
+    transform: rotateY(0deg);
+  }
+
   .flashcard-back {
     transform: rotateY(180deg);
   }
-  
+
+  /* Prevent content overflow during the flip itself */
+  .flashcard:not(.flipped) .flashcard-back {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .flashcard.flipped .flashcard-front {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
   /* Code block styling */
   .prose pre {
     @apply bg-muted rounded-lg p-4 overflow-x-auto;
   }
-  
+
   .prose code {
     @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
   }
-  
+
   .prose pre code {
     @apply bg-transparent p-0;
   }
-  
+
   /* Category badges */
   .category-badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-  
+
   /* Difficulty indicators */
   .difficulty-junior {
     @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
   }
-  
+
   .difficulty-mid {
     @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
   }
-  
+
   .difficulty-senior {
     @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
   }
@@ -139,16 +162,16 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   /* Smooth scroll */
   .scroll-smooth {
     scroll-behavior: smooth;
   }
-  
+
   /* Text balance for headings */
   .text-balance {
     text-wrap: balance;

@@ -1,0 +1,30 @@
+i am visiting /flashcards/system-design
+the server console is correctly showing:
+CATEGORY: system-design
+categoryMeta: {
+  id: 'system-design',
+  slug: 'system-design',
+  name: 'System Design & Architecture',
+  description: 'Frontend architecture patterns, scalability, component design, state management strategies, and real-world system design scenarios.',
+  icon: 'Layout',
+  color: 'bg-blue-500'
+}
+
+
+- in the yu we are seeing no cards to study although we have seeded the db
+- in flashcard arena we have:  // TODO: Fetch questions from database
+- we have to fetch , this is currently not implemented 
+- other todo:
+* src/app/questions/[id]/page.tsx:
+export default async function QuestionDetailPage({ params }: QuestionPageProps) {
+  const { id } = await params;
+
+  // TODO: Fetch question from database
+
+* // src/components/questions/QuestionList.tsx
+export function QuestionList() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // TODO: Fetch questions from database
+  useEffect(() => {

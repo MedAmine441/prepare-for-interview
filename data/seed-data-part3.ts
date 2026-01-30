@@ -1,7 +1,7 @@
 // data/seed-data-part3.ts
 
-import type { CreateQuestionInput } from '@/types';
-import { QUESTION_CATEGORIES } from '@/types';
+import type { CreateQuestionInput } from "@/types";
+import { QUESTION_CATEGORIES } from "@/types";
 
 // ============================================================================
 // REACT INTERNALS
@@ -10,36 +10,36 @@ import { QUESTION_CATEGORIES } from '@/types';
 const reactInternalsQuestions: CreateQuestionInput[] = [
   {
     category: QUESTION_CATEGORIES.REACT_INTERNALS,
-    difficulty: 'senior',
+    difficulty: "senior",
     question:
-      'Explain React\'s Fiber architecture. What problem does it solve, and how does it enable concurrent features like Suspense and transitions?',
+      "Explain React's Fiber architecture. What problem does it solve, and how does it enable concurrent features like Suspense and transitions?",
     answer: `## Why Fiber Was Created
 
 Before Fiber (React 15 and earlier), React's reconciliation was **synchronous and recursive**. Once started, it couldn't be interrupted.
 
 \`\`\`
 Old Stack Reconciler:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Component Tree Reconciliation                          â”‚
-â”‚  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•       â”‚
-â”‚  A â†’ B â†’ C â†’ D â†’ E â†’ F â†’ G â†’ ... (no interruption)     â”‚
-â”‚  â”‚                                    â”‚                 â”‚
-â”‚  Start                               End                â”‚
-â”‚                                                         â”‚
-â”‚  Problem: 100ms+ of work = 100ms of blocked main threadâ”‚
-â”‚           = janky UI, dropped frames                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────┐
+│  Component Tree Reconciliation                          │
+│  ════════════════════════════════════════════════       │
+│  A → B → C → D → E → F → G → ... (no interruption)     │
+│  │                                    │                 │
+│  Start                               End                │
+│                                                         │
+│  Problem: 100ms+ of work = 100ms of blocked main thread│
+│           = janky UI, dropped frames                    │
+└─────────────────────────────────────────────────────────┘
 
 Fiber Architecture:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Work Units (Fibers)                                    â”‚
-â”‚  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•       â”‚
-â”‚  A â†’ B â†’ C â†’ [PAUSE] â†’ D â†’ E â†’ [PAUSE] â†’ F â†’ G         â”‚
-â”‚              â†“                 â†“                        â”‚
-â”‚         Handle event      Handle animation              â”‚
-â”‚                                                         â”‚
-â”‚  Solution: Split work into units, yield to browser      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────┐
+│  Work Units (Fibers)                                    │
+│  ════════════════════════════════════════════════       │
+│  A → B → C → [PAUSE] → D → E → [PAUSE] → F → G         │
+│              ↓                 ↓                        │
+│         Handle event      Handle animation              │
+│                                                         │
+│  Solution: Split work into units, yield to browser      │
+└─────────────────────────────────────────────────────────┘
 \`\`\`
 
 ## What is a Fiber?
@@ -80,18 +80,18 @@ interface Fiber {
 ## Double Buffering: Current vs Work-in-Progress
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚   Current Tree      â”‚         â”‚   Work-in-Progress  â”‚
-â”‚   (on screen)       â”‚â—„â”€â”€â”€â”€â”€â”€â”€â–ºâ”‚   Tree (building)   â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤         â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚   Fiber A           â”‚         â”‚   Fiber A'          â”‚
-â”‚     â”œâ”€â”€ Fiber B     â”‚         â”‚     â”œâ”€â”€ Fiber B'    â”‚
-â”‚     â””â”€â”€ Fiber C     â”‚         â”‚     â””â”€â”€ Fiber C'    â”‚
-â”‚          â””â”€â”€ Fiber Dâ”‚         â”‚          â””â”€â”€ Fiber D'â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-         â”‚                               â”‚
-         â”‚    After commit, trees swap   â”‚
-         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────┐         ┌─────────────────────┐
+│   Current Tree      │         │   Work-in-Progress  │
+│   (on screen)       │◄───────►│   Tree (building)   │
+┌─────────────────────┤         ┌─────────────────────┤
+│   Fiber A           │         │   Fiber A'          │
+│     ┌── Fiber B     │         │     ┌── Fiber B'    │
+│     └── Fiber C     │         │     └── Fiber C'    │
+│          └── Fiber D│         │          └── Fiber D'│
+└─────────────────────┘         └─────────────────────┘
+         │                               │
+         │    After commit, trees swap   │
+         └───────────────────────────────┘
 \`\`\`
 
 - **Current**: What's currently rendered on screen
@@ -102,20 +102,20 @@ interface Fiber {
 
 \`\`\`
 RENDER PHASE (Interruptible)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-â€¢ Build work-in-progress tree
-â€¢ Determine what changed
-â€¢ Calculate side effects
-â€¢ Can be paused, aborted, restarted
+════════════════════════════════════════════════════════
+• Build work-in-progress tree
+• Determine what changed
+• Calculate side effects
+• Can be paused, aborted, restarted
 
-                         â†“
+                         ↓
 
 COMMIT PHASE (Synchronous, Uninterruptible)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-â€¢ Apply DOM changes
-â€¢ Run useLayoutEffect
-â€¢ Run useEffect (scheduled)
-â€¢ Must complete - can't pause
+════════════════════════════════════════════════════════
+• Apply DOM changes
+• Run useLayoutEffect
+• Run useEffect (scheduled)
+• Must complete - can't pause
 \`\`\`
 
 ## How Fiber Enables Concurrency
@@ -277,43 +277,48 @@ function handleSearch(query: string) {
 | Error Boundaries | Catch errors in render phase |
 | Streaming SSR | Incremental hydration |`,
     keyPoints: [
-      'Understands why Fiber was created (blocking reconciliation)',
-      'Knows Fiber node structure',
-      'Can explain double buffering (current vs WIP)',
-      'Understands render vs commit phases',
-      'Knows how priority lanes work',
-      'Can explain how Suspense leverages Fiber',
+      "Understands why Fiber was created (blocking reconciliation)",
+      "Knows Fiber node structure",
+      "Can explain double buffering (current vs WIP)",
+      "Understands render vs commit phases",
+      "Knows how priority lanes work",
+      "Can explain how Suspense leverages Fiber",
     ],
     followUpQuestions: [
-      'How does error boundary work with Fiber?',
-      'What triggers a re-render in Fiber?',
-      'How does React know when to yield to the browser?',
-      'What\'s the difference between concurrent and synchronous mode?',
+      "How does error boundary work with Fiber?",
+      "What triggers a re-render in Fiber?",
+      "How does React know when to yield to the browser?",
+      "What's the difference between concurrent and synchronous mode?",
     ],
-    relatedTopics: ['reconciliation', 'virtual-dom', 'concurrent-react', 'suspense'],
-    source: 'seed',
-    commonAt: ['Meta', 'Companies using React heavily'],
+    relatedTopics: [
+      "reconciliation",
+      "virtual-dom",
+      "concurrent-react",
+      "suspense",
+    ],
+    source: "seed",
+    commonAt: ["Meta", "Companies using React heavily"],
   },
   {
     category: QUESTION_CATEGORIES.REACT_INTERNALS,
-    difficulty: 'senior',
+    difficulty: "senior",
     question:
-      'How does React\'s reconciliation algorithm work? Explain the diffing heuristics and how the key prop optimizes list updates.',
+      "How does React's reconciliation algorithm work? Explain the diffing heuristics and how the key prop optimizes list updates.",
     answer: `## Reconciliation Overview
 
 Reconciliation is the process of comparing the new element tree with the previous one to determine what DOM changes are needed.
 
 \`\`\`
 New JSX Tree          Previous Fiber Tree          DOM Updates
-    â”‚                        â”‚                         â”‚
-    â””â”€â”€â”€â”€â”€â”€â–º Reconciler â—„â”€â”€â”€â”€â”˜                         â”‚
-                 â”‚                                     â”‚
-                 â””â”€â–º Determines minimum changes â”€â”€â”€â”€â”€â”€â”€â”˜
+    │                        │                         │
+    └──────► Reconciler ◄────┘                         │
+                 │                                     │
+                 └─► Determines minimum changes ───────┘
 \`\`\`
 
 ## Two Key Heuristics
 
-React's diffing algorithm is O(n) instead of O(nÂ³) due to two heuristics:
+React's diffing algorithm is O(n) instead of O(n³) due to two heuristics:
 
 ### 1. Different Types Produce Different Trees
 
@@ -342,10 +347,10 @@ React's diffing algorithm is O(n) instead of O(nÂ³) due to two heuristics:
 // After:  [X, A, B, C]
 
 // React sees:
-// index 0: A â†’ X (update A to X)
-// index 1: B â†’ A (update B to A)
-// index 2: C â†’ B (update C to B)
-// index 3: null â†’ C (create C)
+// index 0: A → X (update A to X)
+// index 1: B → A (update B to A)
+// index 2: C → B (update C to B)
+// index 3: null → C (create C)
 // Result: Updates everything! Inefficient.
 
 // With keys:
@@ -353,10 +358,10 @@ React's diffing algorithm is O(n) instead of O(nÂ³) due to two heuristics:
 // After:  [X:0, A:1, B:2, C:3]
 
 // React sees:
-// key 1: A â†’ A (no change)
-// key 2: B â†’ B (no change)
-// key 3: C â†’ C (no change)
-// key 0: null â†’ X (create X, insert at start)
+// key 1: A → A (no change)
+// key 2: B → B (no change)
+// key 3: C → C (no change)
+// key 0: null → X (create X, insert at start)
 // Result: Only creates X! Efficient.
 \`\`\`
 
@@ -503,7 +508,7 @@ function reconcileChildrenArray(
 ### Why Index Keys Are Bad
 
 \`\`\`tsx
-// âŒ Using index as key
+// ❌ Using index as key
 {items.map((item, index) => (
   <ListItem key={index} item={item} />
 ))}
@@ -513,8 +518,8 @@ function reconcileChildrenArray(
 // After:  key=0:B, key=1:C
 
 // React sees:
-// - key=0: A â†’ B (update item A to B) ðŸ˜± WRONG!
-// - key=1: B â†’ C (update item B to C) ðŸ˜± WRONG!
+// - key=0: A → B (update item A to B) ðŸ˜± WRONG!
+// - key=1: B → C (update item B to C) ðŸ˜± WRONG!
 // - key=2: deleted
 
 // Problems:
@@ -526,7 +531,7 @@ function reconcileChildrenArray(
 ### Correct Key Usage
 
 \`\`\`tsx
-// âœ… Using stable unique ID
+// ✅ Using stable unique ID
 {items.map(item => (
   <ListItem key={item.id} item={item} />
 ))}
@@ -536,9 +541,9 @@ function reconcileChildrenArray(
 // After:  key=b:B, key=c:C
 
 // React sees:
-// - key=a: deleted âœ“
-// - key=b: B â†’ B (no change) âœ“
-// - key=c: C â†’ C (no change) âœ“
+// - key=a: deleted✓
+// - key=b: B → B (no change)✓
+// - key=c: C → C (no change)✓
 
 // Only the deleted item is removed!
 \`\`\`
@@ -547,15 +552,15 @@ function reconcileChildrenArray(
 
 \`\`\`tsx
 // 1. Keys must be STABLE (same across renders)
-// âŒ Bad
+// ❌ Bad
 <Item key={Math.random()} /> // New key every render!
 
 // 2. Keys must be UNIQUE among siblings
-// âŒ Bad
+// ❌ Bad
 {items.map(item => <Item key="same" item={item} />)}
 
 // 3. Keys don't need to be globally unique
-// âœ… OK - different lists can have same keys
+// ✅ OK - different lists can have same keys
 <ul>{listA.map(i => <li key={i.id}>{i.name}</li>)}</ul>
 <ul>{listB.map(i => <li key={i.id}>{i.name}</li>)}</ul>
 
@@ -590,28 +595,28 @@ function Editor({ documentId }) {
 }
 \`\`\``,
     keyPoints: [
-      'Understands O(n) heuristics',
-      'Knows type comparison rules',
-      'Can explain array reconciliation phases',
-      'Understands why index keys are problematic',
-      'Knows key affects component identity',
-      'Can use key to reset component state',
+      "Understands O(n) heuristics",
+      "Knows type comparison rules",
+      "Can explain array reconciliation phases",
+      "Understands why index keys are problematic",
+      "Knows key affects component identity",
+      "Can use key to reset component state",
     ],
     followUpQuestions: [
-      'How does React handle adding/removing items in the middle of a list?',
-      'What about reconciliation with fragments?',
-      'How does Suspense affect reconciliation?',
-      'Can you force a component to remount without changing key?',
+      "How does React handle adding/removing items in the middle of a list?",
+      "What about reconciliation with fragments?",
+      "How does Suspense affect reconciliation?",
+      "Can you force a component to remount without changing key?",
     ],
-    relatedTopics: ['fiber', 'virtual-dom', 'performance', 'keys'],
-    source: 'seed',
-    commonAt: ['Meta', 'Any React-heavy company'],
+    relatedTopics: ["fiber", "virtual-dom", "performance", "keys"],
+    source: "seed",
+    commonAt: ["Meta", "Any React-heavy company"],
   },
   {
     category: QUESTION_CATEGORIES.REACT_INTERNALS,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'How do React hooks work internally? Why can\'t hooks be called conditionally, and how does React track hook state between renders?',
+      "How do React hooks work internally? Why can't hooks be called conditionally, and how does React track hook state between renders?",
     answer: `## Hook Storage: The Fiber\'s Hook List
 
 Each fiber has a linked list of hooks. React uses the **call order** to match hooks between renders.
@@ -634,12 +639,12 @@ interface Hook {
 
 \`\`\`
 Component renders:
-useState(0)     â†’ Hook 1 { memoizedState: 0, next: â†’ }
-useEffect(...)  â†’ Hook 2 { memoizedState: effect, next: â†’ }
-useMemo(...)    â†’ Hook 3 { memoizedState: [value, deps], next: â†’ }
-useState('')    â†’ Hook 4 { memoizedState: '', next: null }
+useState(0)     → Hook 1 { memoizedState: 0, next: → }
+useEffect(...)  → Hook 2 { memoizedState: effect, next: → }
+useMemo(...)    → Hook 3 { memoizedState: [value, deps], next: → }
+useState('')    → Hook 4 { memoizedState: '', next: null }
 
-Fiber.memoizedState â†’ [Hook 1] â†’ [Hook 2] â†’ [Hook 3] â†’ [Hook 4]
+Fiber.memoizedState → [Hook 1] → [Hook 2] → [Hook 3] → [Hook 4]
 \`\`\`
 
 ## Why Call Order Matters
@@ -656,8 +661,8 @@ function Component() {
 
 // Second render (after setA(10)):
 function Component() {
-  const [a, setA] = useState(1);  // Reads Hook 0 â†’ gets 10 âœ“
-  const [b, setB] = useState(2);  // Reads Hook 1 â†’ gets 2 âœ“
+  const [a, setA] = useState(1);  // Reads Hook 0 → gets 10✓
+  const [b, setB] = useState(2);  // Reads Hook 1 → gets 2✓
   return <div>{a} {b}</div>;
 }
 \`\`\`
@@ -665,7 +670,7 @@ function Component() {
 ### What Happens With Conditional Hooks
 
 \`\`\`typescript
-// âŒ Broken: Conditional hook
+// ❌ Broken: Conditional hook
 function Component({ showExtra }) {
   const [a, setA] = useState(1);   // Hook 0
   
@@ -682,9 +687,9 @@ function Component({ showExtra }) {
 // Hook 2: b = 2
 
 // Second render (showExtra = false):
-// Hook 0: a = 1       âœ“
-// Hook 1: b reads from 'extra' position â†’ b = 'x' ðŸ’¥ WRONG!
-// Hook 2: ??? â†’ Error: more hooks than expected
+// Hook 0: a = 1      ✓
+// Hook 1: b reads from 'extra' position → b = 'x' ðŸ’¥ WRONG!
+// Hook 2: ??? → Error: more hooks than expected
 \`\`\`
 
 ## Internal Implementation
@@ -831,17 +836,17 @@ function areHookInputsEqual(
 // Rule 1: Only call at top level
 // WHY: Preserves call order for hook matching
 
-// âŒ Inside condition
+// ❌ Inside condition
 if (condition) {
   useState(); // Order changes between renders
 }
 
-// âŒ Inside loop
+// ❌ Inside loop
 for (let i = 0; i < count; i++) {
   useState(); // Number of hooks changes
 }
 
-// âŒ Inside nested function
+// ❌ Inside nested function
 const handler = () => {
   useState(); // Called after render, no fiber context
 };
@@ -849,17 +854,17 @@ const handler = () => {
 // Rule 2: Only call from React functions
 // WHY: Hooks need fiber context (currentlyRenderingFiber)
 
-// âŒ Regular function
+// ❌ Regular function
 function helper() {
   const [state] = useState(); // No fiber!
 }
 
-// âœ… React component
+// ✅ React component
 function Component() {
   const [state] = useState(); // Fiber exists
 }
 
-// âœ… Custom hook (will be called from component)
+// ✅ Custom hook (will be called from component)
 function useCustom() {
   const [state] = useState(); // Fiber exists via call stack
 }
@@ -877,74 +882,74 @@ function useCustom() {
 | useEffect | Effect object with create/destroy |
 | useContext | (reads from context, no memoizedState) |`,
     keyPoints: [
-      'Knows hooks are stored as linked list',
-      'Understands call order matching',
-      'Can explain why conditional hooks break',
-      'Knows useState is implemented with useReducer',
-      'Understands dependency comparison',
-      'Knows what each hook stores in memoizedState',
+      "Knows hooks are stored as linked list",
+      "Understands call order matching",
+      "Can explain why conditional hooks break",
+      "Knows useState is implemented with useReducer",
+      "Understands dependency comparison",
+      "Knows what each hook stores in memoizedState",
     ],
     followUpQuestions: [
-      'How does useContext differ from other hooks?',
-      'Why does useState use Object.is for comparison?',
-      'How do custom hooks share state?',
-      'What about hooks in concurrent mode?',
+      "How does useContext differ from other hooks?",
+      "Why does useState use Object.is for comparison?",
+      "How do custom hooks share state?",
+      "What about hooks in concurrent mode?",
     ],
-    relatedTopics: ['hooks', 'fiber', 'state-management', 'closures'],
-    source: 'seed',
-    commonAt: ['Meta', 'Any React company'],
+    relatedTopics: ["hooks", "fiber", "state-management", "closures"],
+    source: "seed",
+    commonAt: ["Meta", "Any React company"],
   },
   {
     category: QUESTION_CATEGORIES.REACT_INTERNALS,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'Explain React Server Components (RSC). What problems do they solve, and how do they differ from traditional SSR?',
+      "Explain React Server Components (RSC). What problems do they solve, and how do they differ from traditional SSR?",
     answer: `## Traditional SSR vs RSC
 
 ### Traditional SSR
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Server                                                         â”‚
-â”‚  â•â•â•â•â•â•â•                                                        â”‚
-â”‚  1. Render to HTML string                                       â”‚
-â”‚  2. Send HTML + ALL JS bundles                                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Client                                                         â”‚
-â”‚  â•â•â•â•â•â•â•                                                        â”‚
-â”‚  1. Display HTML (fast FCP)                                     â”‚
-â”‚  2. Download JS bundle (includes ALL components)                â”‚
-â”‚  3. Hydrate: Re-run ALL components, attach event listeners      â”‚
-â”‚                                                                 â”‚
-â”‚  Problem: Must re-execute everything client-side                â”‚
-â”‚           Large bundle includes server-only code                â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────────┐
+│  Server                                                         │
+│  ═══════                                                        │
+│  1. Render to HTML string                                       │
+│  2. Send HTML + ALL JS bundles                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ┼
+┌─────────────────────────────────────────────────────────────────┐
+│  Client                                                         │
+│  ═══════                                                        │
+│  1. Display HTML (fast FCP)                                     │
+│  2. Download JS bundle (includes ALL components)                │
+│  3. Hydrate: Re-run ALL components, attach event listeners      │
+│                                                                 │
+│  Problem: Must re-execute everything client-side                │
+│           Large bundle includes server-only code                │
+└─────────────────────────────────────────────────────────────────┘
 \`\`\`
 
 ### React Server Components
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Server                                                         â”‚
-â”‚  â•â•â•â•â•â•â•                                                        â”‚
-â”‚  1. Render Server Components â†’ RSC Payload (serialized tree)    â”‚
-â”‚  2. Send RSC Payload + ONLY Client Component JS                 â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Client                                                         â”‚
-â”‚  â•â•â•â•â•â•â•                                                        â”‚
-â”‚  1. Display rendered content                                    â”‚
-â”‚  2. Download ONLY client component JS                           â”‚
-â”‚  3. Hydrate ONLY client components                              â”‚
-â”‚                                                                 â”‚
-â”‚  Benefit: Server-only code stays on server                      â”‚
-â”‚           Smaller bundles, less hydration work                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────────┐
+│  Server                                                         │
+│  ═══════                                                        │
+│  1. Render Server Components → RSC Payload (serialized tree)    │
+│  2. Send RSC Payload + ONLY Client Component JS                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ┼
+┌─────────────────────────────────────────────────────────────────┐
+│  Client                                                         │
+│  ═══════                                                        │
+│  1. Display rendered content                                    │
+│  2. Download ONLY client component JS                           │
+│  3. Hydrate ONLY client components                              │
+│                                                                 │
+│  Benefit: Server-only code stays on server                      │
+│           Smaller bundles, less hydration work                  │
+└─────────────────────────────────────────────────────────────────┘
 \`\`\`
 
 ## RSC vs SSR Key Differences
@@ -1001,7 +1006,7 @@ async function ProductPage({ params }: { params: { id: string } }) {
 \`\`\`tsx
 // Client Component - runs on client (and server for SSR)
 // File: components/AddToCartButton.tsx
-'use client';  // â† Required directive
+'use client';  // → Required directive
 
 import { useState } from 'react';
 import { useCart } from '@/hooks/useCart';
@@ -1028,25 +1033,25 @@ export function AddToCartButton({ productId }: { productId: string }) {
 
 \`\`\`
 Server Component (Root)
-â”‚
-â”œâ”€â”€ Server Component (can do async, db, secrets)
-â”‚   â”‚
-â”‚   â”œâ”€â”€ Client Component ('use client')
-â”‚   â”‚   â”‚
-â”‚   â”‚   â””â”€â”€ Any Component (becomes client)
-â”‚   â”‚       â”‚
-â”‚   â”‚       â””â”€â”€ All descendants are client
-â”‚   â”‚
-â”‚   â””â”€â”€ Server Component (still server!)
-â”‚
-â””â”€â”€ Client Component
-    â”‚
-    â””â”€â”€ Can render Server Components as children
+│
+┌── Server Component (can do async, db, secrets)
+│   │
+│   ┌── Client Component ('use client')
+│   │   │
+│   │   └── Any Component (becomes client)
+│   │       │
+│   │       └── All descendants are client
+│   │
+│   └── Server Component (still server!)
+│
+└── Client Component
+    │
+    └── Can render Server Components as children
         (passed as props, not imported)
 \`\`\`
 
 \`\`\`tsx
-// âœ… Correct: Server component as children
+// ✅ Correct: Server component as children
 // Server
 function ServerParent() {
   return (
@@ -1068,7 +1073,7 @@ function ClientWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-// âŒ Wrong: Importing server component in client
+// ❌ Wrong: Importing server component in client
 'use client';
 import { ServerComponent } from './ServerComponent'; // Error or becomes client!
 \`\`\`
@@ -1099,26 +1104,26 @@ import { ServerComponent } from './ServerComponent'; // Error or becomes client!
 
 \`\`\`tsx
 // SERVER COMPONENTS for:
-// âœ“ Data fetching
-// âœ“ Accessing backend resources
-// âœ“ Keeping sensitive info on server
-// âœ“ Large dependencies (syntax highlighters, markdown)
-// âœ“ Static content
+//✓ Data fetching
+//✓ Accessing backend resources
+//✓ Keeping sensitive info on server
+//✓ Large dependencies (syntax highlighters, markdown)
+//✓ Static content
 
 // CLIENT COMPONENTS for:
-// âœ“ Interactivity (onClick, onChange)
-// âœ“ State (useState, useReducer)
-// âœ“ Effects (useEffect)
-// âœ“ Browser APIs (localStorage, geolocation)
-// âœ“ Custom hooks with state/effects
-// âœ“ Class components
+//✓ Interactivity (onClick, onChange)
+//✓ State (useState, useReducer)
+//✓ Effects (useEffect)
+//✓ Browser APIs (localStorage, geolocation)
+//✓ Custom hooks with state/effects
+//✓ Class components
 
 // PATTERN: Push client boundaries down
-// âŒ Making entire page client
+// ❌ Making entire page client
 'use client';
 export default function Page() { ... }
 
-// âœ… Only interactive parts are client
+// ✅ Only interactive parts are client
 export default function Page() {
   const data = await fetchData();
   return (
@@ -1131,22 +1136,22 @@ export default function Page() {
 }
 \`\`\``,
     keyPoints: [
-      'Understands RSC vs traditional SSR difference',
-      'Knows server components stay on server',
-      'Can identify what needs \'use client\'',
-      'Understands the component tree boundaries',
-      'Knows RSC payload format conceptually',
-      'Can optimize by pushing client boundaries down',
+      "Understands RSC vs traditional SSR difference",
+      "Knows server components stay on server",
+      "Can identify what needs 'use client'",
+      "Understands the component tree boundaries",
+      "Knows RSC payload format conceptually",
+      "Can optimize by pushing client boundaries down",
     ],
     followUpQuestions: [
-      'How does streaming work with RSC?',
-      'What about caching RSC payloads?',
-      'How do RSC handle forms and mutations?',
-      'What\'s the relationship between RSC and Suspense?',
+      "How does streaming work with RSC?",
+      "What about caching RSC payloads?",
+      "How do RSC handle forms and mutations?",
+      "What's the relationship between RSC and Suspense?",
     ],
-    relatedTopics: ['nextjs', 'ssr', 'streaming', 'hydration'],
-    source: 'seed',
-    commonAt: ['Vercel', 'Companies using Next.js 13+'],
+    relatedTopics: ["nextjs", "ssr", "streaming", "hydration"],
+    source: "seed",
+    commonAt: ["Vercel", "Companies using Next.js 13+"],
   },
 ];
 

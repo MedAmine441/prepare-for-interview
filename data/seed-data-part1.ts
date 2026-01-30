@@ -293,28 +293,28 @@ A shared component library at scale requires careful architecture around version
 
 \`\`\`
 packages/
-â”œâ”€â”€ @company/components/        # Core component library
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ components/
-â”‚   â”‚   â”‚   â”œâ”€â”€ Button/
-â”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.tsx
-â”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.test.tsx
-â”‚   â”‚   â”‚   â”‚   â”œâ”€â”€ Button.stories.tsx
-â”‚   â”‚   â”‚   â”‚   â””â”€â”€ index.ts
-â”‚   â”‚   â”‚   â””â”€â”€ ...
-â”‚   â”‚   â”œâ”€â”€ hooks/
-â”‚   â”‚   â”œâ”€â”€ utils/
-â”‚   â”‚   â””â”€â”€ index.ts
-â”‚   â””â”€â”€ package.json
-â”œâ”€â”€ @company/tokens/            # Design tokens
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ colors.ts
-â”‚   â”‚   â”œâ”€â”€ spacing.ts
-â”‚   â”‚   â”œâ”€â”€ typography.ts
-â”‚   â”‚   â””â”€â”€ index.ts
-â”‚   â””â”€â”€ package.json
-â”œâ”€â”€ @company/icons/             # Icon library
-â””â”€â”€ @company/themes/            # Theme presets
+┌── @company/components/        # Core component library
+│   ┌── src/
+│   │   ┌── components/
+│   │   │   ┌── Button/
+│   │   │   │   ┌── Button.tsx
+│   │   │   │   ┌── Button.test.tsx
+│   │   │   │   ┌── Button.stories.tsx
+│   │   │   │   └── index.ts
+│   │   │   └── ...
+│   │   ┌── hooks/
+│   │   ┌── utils/
+│   │   └── index.ts
+│   └── package.json
+┌── @company/tokens/            # Design tokens
+│   ┌── src/
+│   │   ┌── colors.ts
+│   │   ┌── spacing.ts
+│   │   ┌── typography.ts
+│   │   └── index.ts
+│   └── package.json
+┌── @company/icons/             # Icon library
+└── @company/themes/            # Theme presets
 \`\`\`
 
 ### 2. Component API Design Philosophy
@@ -564,26 +564,26 @@ A real-time dashboard with 100+ data sources requires careful architecture aroun
 ## Architecture Overview
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                    Dashboard Shell                           â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”‚
-â”‚  â”‚   Widget    â”‚  â”‚   Widget    â”‚  â”‚   Widget    â”‚         â”‚
-â”‚  â”‚  (Chart)    â”‚  â”‚  (Table)    â”‚  â”‚   (KPI)     â”‚         â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜         â”‚
-â”‚         â”‚                â”‚                â”‚                 â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”         â”‚
-â”‚  â”‚            Data Subscription Layer            â”‚         â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â”‚
-â”‚                         â”‚                                   â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”‚
-â”‚  â”‚         WebSocket Connection Manager          â”‚         â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                          â”‚
-                    â”Œâ”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”
-                    â”‚  Gateway  â”‚  (Aggregates 100+ sources)
-                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────┐
+│                    Dashboard Shell                           │
+┌─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   Widget    │  │   Widget    │  │   Widget    │         │
+│  │  (Chart)    │  │  (Table)    │  │   (KPI)     │         │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
+│         │                │                │                 │
+│  ┌──────┬────────────────┬────────────────┬──────┐         │
+│  │            Data Subscription Layer            │         │
+│  └──────────────────────┬────────────────────────┘         │
+│                         │                                   │
+│  ┌──────────────────────┬────────────────────────┐         │
+│  │         WebSocket Connection Manager          │         │
+│  └──────────────────────┬────────────────────────┘         │
+└─────────────────────────┼───────────────────────────────────┘
+                          │
+                    ┌─────┬─────┐
+                    │  Gateway  │  (Aggregates 100+ sources)
+                    └───────────┘
 \`\`\`
 
 ## Core Components
@@ -1968,18 +1968,18 @@ const cachingMemoizationQuestions: CreateQuestionInput[] = [
 
 \`\`\`
 Client Request
-     â”‚
-     â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”     Cache Miss      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚   Browser   â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º â”‚     CDN     â”‚
-â”‚    Cache    â”‚                     â”‚    Cache    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-     â”‚ Cache Hit                          â”‚ Cache Miss
-     â–¼                                    â–¼
-  Response                          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                                    â”‚   Origin    â”‚
-                                    â”‚   Server    â”‚
-                                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+     │
+     ┼
+┌─────────────┐     Cache Miss      ┌─────────────┐
+│   Browser   │ ──────────────────► │     CDN     │
+│    Cache    │                     │    Cache    │
+└─────────────┘                     └─────────────┘
+     │ Cache Hit                          │ Cache Miss
+     ┼                                    ┼
+  Response                          ┌─────────────┐
+                                    │   Origin    │
+                                    │   Server    │
+                                    └─────────────┘
 \`\`\`
 
 ### Cache-Control Directives
@@ -2041,8 +2041,8 @@ app.get('/api/user/:id', async (req, res) => {
 2. Browser caches response with ETag
 3. Subsequent requests: Browser sends \`If-None-Match: <etag>\`
 4. Server compares ETags:
-   - Match â†’ 304 Not Modified (no body)
-   - No match â†’ 200 with new data + new ETag
+   - Match → 304 Not Modified (no body)
+   - No match → 200 with new data + new ETag
 
 ### 3. Three Layers of Caching
 
@@ -2235,7 +2235,7 @@ const handleClick = useMemo(() => {
 
 \`\`\`typescript
 function ProductList({ products, filters }: Props) {
-  // âœ… Good: Filtering/sorting large arrays
+  // ✅ Good: Filtering/sorting large arrays
   const filteredProducts = useMemo(() => {
     return products
       .filter(p => p.category === filters.category)
@@ -2257,7 +2257,7 @@ function ProductList({ products, filters }: Props) {
 
 \`\`\`typescript
 function SearchResults({ query }: { query: string }) {
-  // âœ… Good: Object reference used in dependency array
+  // ✅ Good: Object reference used in dependency array
   const searchParams = useMemo(() => ({
     query,
     limit: 20,
@@ -2268,7 +2268,7 @@ function SearchResults({ query }: { query: string }) {
     fetchResults(searchParams);
   }, [searchParams]); // Won't re-run unless query changes
 
-  // âŒ Bad: New object every render
+  // ❌ Bad: New object every render
   useEffect(() => {
     fetchResults({ query, limit: 20, offset: 0 });
   }, [{ query, limit: 20, offset: 0 }]); // Always re-runs!
@@ -2284,7 +2284,7 @@ const MemoizedChart = memo(function Chart({ data }: { data: DataPoint[] }) {
 });
 
 function Dashboard({ rawData }: { rawData: RawData[] }) {
-  // âœ… Good: Stable reference for memo'd child
+  // ✅ Good: Stable reference for memo'd child
   const chartData = useMemo(() => {
     return rawData.map(d => ({
       x: d.timestamp,
@@ -2315,7 +2315,7 @@ const MemoizedButton = memo(function Button({
 function Parent() {
   const [count, setCount] = useState(0);
   
-  // âœ… Good: Stable function reference
+  // ✅ Good: Stable function reference
   const handleClick = useCallback(() => {
     setCount(c => c + 1);
   }, []); // No dependencies - uses updater function
@@ -2333,7 +2333,7 @@ function Parent() {
 
 \`\`\`typescript
 function SearchComponent({ userId }: { userId: string }) {
-  // âœ… Good: Stable function for effect dependency
+  // ✅ Good: Stable function for effect dependency
   const fetchUserData = useCallback(async () => {
     const response = await fetch(\`/api/users/\${userId}\`);
     return response.json();
@@ -2352,7 +2352,7 @@ function useDebounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
   delay: number
 ): T {
-  // âœ… Good: Return stable debounced function
+  // ✅ Good: Return stable debounced function
   return useCallback(
     debounce(fn, delay) as T,
     [fn, delay]
@@ -2365,7 +2365,7 @@ function useDebounce<T extends (...args: unknown[]) => unknown>(
 ### 1. Premature Optimization
 
 \`\`\`typescript
-// âŒ Bad: Unnecessary memoization
+// ❌ Bad: Unnecessary memoization
 function SimpleComponent({ name }: { name: string }) {
   // This is overkill - string concatenation is fast
   const greeting = useMemo(() => \`Hello, \${name}!\`, [name]);
@@ -2378,7 +2378,7 @@ function SimpleComponent({ name }: { name: string }) {
   return <div onClick={handleClick}>{greeting}</div>;
 }
 
-// âœ… Good: Just use plain values
+// ✅ Good: Just use plain values
 function SimpleComponent({ name }: { name: string }) {
   const greeting = \`Hello, \${name}!\`;
   const handleClick = () => console.log('clicked');
@@ -2393,12 +2393,12 @@ function SimpleComponent({ name }: { name: string }) {
 function Counter() {
   const [count, setCount] = useState(0);
   
-  // âŒ Bad: Stale closure - always logs 0
+  // ❌ Bad: Stale closure - always logs 0
   const logCount = useCallback(() => {
     console.log(count);
   }, []); // Missing 'count' dependency
 
-  // âœ… Good: Use ref for latest value without re-creating
+  // ✅ Good: Use ref for latest value without re-creating
   const countRef = useRef(count);
   countRef.current = count;
   
@@ -2412,12 +2412,12 @@ function Counter() {
 
 \`\`\`typescript
 function Component({ config }: { config: { theme: string } }) {
-  // âŒ Bad: New object every render breaks memoization
+  // ❌ Bad: New object every render breaks memoization
   const handleClick = useCallback(() => {
     applyTheme(config);
   }, [config]); // config is new object each render!
 
-  // âœ… Good: Depend on primitive values
+  // ✅ Good: Depend on primitive values
   const handleClick = useCallback(() => {
     applyTheme({ theme: config.theme });
   }, [config.theme]);
@@ -2427,7 +2427,7 @@ function Component({ config }: { config: { theme: string } }) {
 ### 4. useMemo for JSX
 
 \`\`\`typescript
-// âŒ Bad: Don't memoize JSX (use memo() instead)
+// ❌ Bad: Don't memoize JSX (use memo() instead)
 function Parent({ items }: { items: Item[] }) {
   const list = useMemo(() => (
     <ul>
@@ -2438,7 +2438,7 @@ function Parent({ items }: { items: Item[] }) {
   return <div>{list}</div>;
 }
 
-// âœ… Good: Use memo for component-level optimization
+// ✅ Good: Use memo for component-level optimization
 const ItemList = memo(function ItemList({ items }: { items: Item[] }) {
   return (
     <ul>
@@ -2452,20 +2452,20 @@ const ItemList = memo(function ItemList({ items }: { items: Item[] }) {
 
 \`\`\`
 Should I use useMemo/useCallback?
-â”‚
-â”œâ”€â–º Is this fixing a measured performance problem?
-â”‚   â””â”€â–º No â†’ Don't use it (premature optimization)
-â”‚
-â”œâ”€â–º Is the value passed to a memo'd child?
-â”‚   â””â”€â–º Yes â†’ Consider useMemo/useCallback
-â”‚
-â”œâ”€â–º Is the value in a useEffect dependency array?
-â”‚   â””â”€â–º Yes â†’ Probably need useMemo/useCallback
-â”‚
-â”œâ”€â–º Is the computation expensive (>1ms)?
-â”‚   â””â”€â–º Yes â†’ Use useMemo
-â”‚
-â””â”€â–º Profile first, optimize second
+│
+┌─► Is this fixing a measured performance problem?
+│   └─► No → Don't use it (premature optimization)
+│
+┌─► Is the value passed to a memo'd child?
+│   └─► Yes → Consider useMemo/useCallback
+│
+┌─► Is the value in a useEffect dependency array?
+│   └─► Yes → Probably need useMemo/useCallback
+│
+┌─► Is the computation expensive (>1ms)?
+│   └─► Yes → Use useMemo
+│
+└─► Profile first, optimize second
 \`\`\``,
     keyPoints: [
       "Knows useMemo is for values, useCallback is for functions",
@@ -2520,8 +2520,8 @@ const expensiveCalculation = memoize((a: number, b: number) => {
   return a * b;
 });
 
-expensiveCalculation(2, 3); // Computing... â†’ 6
-expensiveCalculation(2, 3); // â†’ 6 (cached)
+expensiveCalculation(2, 3); // Computing... → 6
+expensiveCalculation(2, 3); // → 6 (cached)
 \`\`\`
 
 ## Handling Complex Objects
@@ -2529,7 +2529,7 @@ expensiveCalculation(2, 3); // â†’ 6 (cached)
 ### Problem with JSON.stringify
 
 \`\`\`typescript
-// âŒ Issues with JSON.stringify:
+// ❌ Issues with JSON.stringify:
 // 1. Order sensitivity: {a:1,b:2} !== {b:2,a:1}
 // 2. Can't handle circular references
 // 3. Loses functions, undefined, symbols
@@ -2896,24 +2896,24 @@ function memoize<T extends (...args: unknown[]) => unknown>(
     answer: `## React Query Cache Architecture
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                    QueryClient                          â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚  â”‚              QueryCache                          â”‚   â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚   â”‚
-â”‚  â”‚  â”‚  Query: ['users', 1]                    â”‚    â”‚   â”‚
-â”‚  â”‚  â”‚  â”œâ”€â”€ state: { data, error, status }     â”‚    â”‚   â”‚
-â”‚  â”‚  â”‚  â”œâ”€â”€ observers: [Component1, Component2]â”‚    â”‚   â”‚
-â”‚  â”‚  â”‚  â”œâ”€â”€ staleTime: 5000                    â”‚    â”‚   â”‚
-â”‚  â”‚  â”‚  â””â”€â”€ gcTime: 300000                     â”‚    â”‚   â”‚
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚   â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚   â”‚
-â”‚  â”‚  â”‚  Query: ['users', 2]                    â”‚    â”‚   â”‚
-â”‚  â”‚  â”‚  â””â”€â”€ ...                                â”‚    â”‚   â”‚
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚   â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────┐
+│                    QueryClient                          │
+┌─────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              QueryCache                          │   │
+│  │  ┌─────────────────────────────────────────┐    │   │
+│  │  │  Query: ['users', 1]                    │    │   │
+│  │  │  ┌── state: { data, error, status }     │    │   │
+│  │  │  ┌── observers: [Component1, Component2]│    │   │
+│  │  │  ┌── staleTime: 5000                    │    │   │
+│  │  │  └── gcTime: 300000                     │    │   │
+│  │  └─────────────────────────────────────────┘    │   │
+│  │  ┌─────────────────────────────────────────┐    │   │
+│  │  │  Query: ['users', 2]                    │    │   │
+│  │  │  └── ...                                │    │   │
+│  │  └─────────────────────────────────────────┘    │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
 \`\`\`
 
 ## Key Timing Concepts
@@ -2935,9 +2935,9 @@ const { data } = useQuery({
 // T=5min+: Data becomes STALE
 //   - Still returns cached data immediately
 //   - Triggers background refetch on:
-//     â€¢ Component mount
-//     â€¢ Window focus
-//     â€¢ Network reconnect
+//     • Component mount
+//     • Window focus
+//     • Network reconnect
 \`\`\`
 
 ### gcTime (Garbage Collection Time, formerly cacheTime)
@@ -2971,7 +2971,7 @@ type FetchStatus = 'fetching' | 'paused' | 'idle';
 // 
 // Initial Mount:
 //   status: 'pending', fetchStatus: 'fetching'
-//   â””â”€â–º Fetch completes
+//   └─► Fetch completes
 //       status: 'success', fetchStatus: 'idle'
 //
 // Cached Data Available:
@@ -2980,7 +2980,7 @@ type FetchStatus = 'fetching' | 'paused' | 'idle';
 //
 // Error:
 //   status: 'error', fetchStatus: 'idle'
-//   â””â”€â–º Retry
+//   └─► Retry
 //       status: 'error', fetchStatus: 'fetching'
 
 function UserProfile({ userId }: { userId: string }) {
@@ -3288,14 +3288,14 @@ const selectCurrentUserPostsWithStats = createSelector(
 ## Parameterized Selectors
 
 \`\`\`typescript
-// âŒ Bad: Creates new selector instance every render
+// ❌ Bad: Creates new selector instance every render
 const selectTodoById = (state: RootState, todoId: string) =>
   createSelector(
     [selectTodos],
     (todos) => todos.find(t => t.id === todoId)
   )(state);
 
-// âœ… Good: Factory pattern
+// ✅ Good: Factory pattern
 const makeSelectTodoById = () =>
   createSelector(
     [selectTodos, (state: RootState, todoId: string) => todoId],
@@ -3311,7 +3311,7 @@ function TodoItem({ todoId }: { todoId: string }) {
   return <div>{todo?.title}</div>;
 }
 
-// âœ… Better with RTK: createSelector with cache
+// ✅ Better with RTK: createSelector with cache
 import { createSelector } from '@reduxjs/toolkit';
 
 const selectTodoById = createSelector(
@@ -3423,7 +3423,7 @@ const createUserEqualityCheck = (a: User[], b: User[]) => {
 
 \`\`\`typescript
 // 1. Keep selectors small and focused
-// âŒ Bad
+// ❌ Bad
 const selectEverything = createSelector([selectState], (state) => ({
   users: state.users,
   posts: state.posts,
@@ -3431,18 +3431,18 @@ const selectEverything = createSelector([selectState], (state) => ({
   // ...
 }));
 
-// âœ… Good
+// ✅ Good
 const selectUsers = (state: RootState) => state.users;
 const selectPosts = (state: RootState) => state.posts;
 
 // 2. Avoid creating objects in input selectors
-// âŒ Bad
+// ❌ Bad
 const selectUserAndFilter = createSelector(
   [(state) => ({ user: state.user, filter: state.filter })], // New object!
   (combined) => ...
 );
 
-// âœ… Good
+// ✅ Good
 const selectUserAndFilter = createSelector(
   [selectUser, selectFilter],
   (user, filter) => ...
@@ -3493,11 +3493,11 @@ Tree shaking is dead code elimination based on ES Module static analysis. Bundle
 ### Prerequisites for Tree Shaking
 
 \`\`\`typescript
-// âœ… ES Modules - static, analyzable
+// ✅ ES Modules - static, analyzable
 import { map, filter } from 'lodash-es';
 export const utils = { map, filter };
 
-// âŒ CommonJS - dynamic, not analyzable
+// ❌ CommonJS - dynamic, not analyzable
 const _ = require('lodash');
 module.exports = { map: _.map };
 \`\`\`
@@ -3506,7 +3506,7 @@ module.exports = { map: _.map };
 
 **1. Side Effects in Module Scope:**
 \`\`\`typescript
-// âŒ Bad: Side effect at module level
+// ❌ Bad: Side effect at module level
 console.log('Utils loaded!'); // Bundler can't remove this file
 export const add = (a: number, b: number) => a + b;
 \`\`\`
@@ -3521,7 +3521,7 @@ export const add = (a: number, b: number) => a + b;
 
 **3. Barrel Files Anti-Pattern:**
 \`\`\`typescript
-// âŒ Bad: Re-exporting everything
+// ❌ Bad: Re-exporting everything
 export * from './Button';
 export * from './Card';
 // ... 50 more components
@@ -3744,11 +3744,11 @@ Client-side JS manipulates DOM unsafely.
 ## React's Built-in Protection
 
 \`\`\`tsx
-// âœ… Safe - React escapes this
+// ✅ Safe - React escapes this
 function Comment({ text }: { text: string }) {
   return <p>{text}</p>;
 }
-// "<script>alert('xss')</script>" â†’ displayed as text
+// "<script>alert('xss')</script>" → displayed as text
 \`\`\`
 
 ## React XSS Vulnerabilities
@@ -3756,10 +3756,10 @@ function Comment({ text }: { text: string }) {
 ### dangerouslySetInnerHTML
 
 \`\`\`tsx
-// âŒ Dangerous
+// ❌ Dangerous
 <div dangerouslySetInnerHTML={{ __html: userInput }} />
 
-// âœ… Safe - sanitize first
+// ✅ Safe - sanitize first
 import DOMPurify from 'dompurify';
 <div dangerouslySetInnerHTML={{ 
   __html: DOMPurify.sanitize(userInput) 
@@ -3769,11 +3769,11 @@ import DOMPurify from 'dompurify';
 ### javascript: URLs
 
 \`\`\`tsx
-// âŒ Vulnerable
+// ❌ Vulnerable
 <a href={userUrl}>Link</a>
 // Attacker: javascript:alert('XSS')
 
-// âœ… Safe - validate protocol
+// ✅ Safe - validate protocol
 const safeUrl = url.startsWith('http') ? url : '#';
 \`\`\`
 
@@ -3915,12 +3915,12 @@ const flag: FeatureFlag = {
 
 \`\`\`
 Traditional: Feature branches (days/weeks)
-main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º
-      \\â”€â”€feature-branchâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€/
+main ────────────────────────────────►
+      \\──feature-branch──────────/
 
 Trunk-based: Short-lived branches + flags
-main â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â–º
-       â†‘ â†‘ â†‘ â†‘ (daily commits behind flags)
+main ────────────────────────────────►
+       → → → → (daily commits behind flags)
 \`\`\`
 
 ## Benefits
@@ -3933,13 +3933,13 @@ main â”€â—â”€â—â”€â—â”€â—â”€â—
 ## Flag Lifecycle
 
 \`\`\`
-1. CREATED    â†’ Flag added, default OFF
-2. DEVELOPING â†’ Code committed behind flag
-3. TESTING    â†’ Enabled for QA/staging
-4. ROLLING    â†’ Gradual production rollout
-5. RELEASED   â†’ 100% enabled
-6. CLEANUP    â†’ Remove flag code
-7. ARCHIVED   â†’ Flag deleted
+1. CREATED    → Flag added, default OFF
+2. DEVELOPING → Code committed behind flag
+3. TESTING    → Enabled for QA/staging
+4. ROLLING    → Gradual production rollout
+5. RELEASED   → 100% enabled
+6. CLEANUP    → Remove flag code
+7. ARCHIVED   → Flag deleted
 \`\`\`
 
 ## Best Practices
@@ -4173,13 +4173,13 @@ html { }
 
 | Use Case | Flexbox | Grid |
 |----------|---------|------|
-| Navigation | âœ… | |
-| Centering | âœ… | |
-| Unknown item count | âœ… | |
-| Page layout | | âœ… |
-| Card grid (equal sizes) | | âœ… |
-| Overlapping elements | | âœ… |
-| Both row & column control | | âœ… |
+| Navigation | ✅ | |
+| Centering | ✅ | |
+| Unknown item count | ✅ | |
+| Page layout | | ✅ |
+| Card grid (equal sizes) | | ✅ |
+| Overlapping elements | | ✅ |
+| Both row & column control | | ✅ |
 
 ## Combining Both
 
@@ -4245,10 +4245,10 @@ A Block Formatting Context is a region where block boxes are laid out and floats
 <style>
 .float { float: left; }
 
-/* âŒ Container collapses (height: 0) */
+/* ❌ Container collapses (height: 0) */
 .container { background: gray; }
 
-/* âœ… BFC contains the float */
+/* ✅ BFC contains the float */
 .container { display: flow-root; }
 </style>
 \`\`\`
@@ -4263,10 +4263,10 @@ A Block Formatting Context is a region where block boxes are laid out and floats
 <style>
 .child { margin-top: 20px; }
 
-/* âŒ Margin collapses through parent */
+/* ❌ Margin collapses through parent */
 .parent { background: gray; }
 
-/* âœ… BFC prevents margin collapse */
+/* ✅ BFC prevents margin collapse */
 .parent { display: flow-root; }
 </style>
 \`\`\`
@@ -4280,10 +4280,10 @@ A Block Formatting Context is a region where block boxes are laid out and floats
 <style>
 .float { float: left; width: 200px; }
 
-/* âŒ Main content wraps around float */
+/* ❌ Main content wraps around float */
 .main { }
 
-/* âœ… BFC creates independent block */
+/* ✅ BFC creates independent block */
 .main { display: flow-root; }
 </style>
 \`\`\`
@@ -4332,32 +4332,32 @@ const jsEventLoopQuestions: CreateQuestionInput[] = [
     answer: `## Event Loop Architecture
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                       Call Stack                         â”‚
-â”‚  (Currently executing synchronous code)                 â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                          â”‚
-                          â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                      Event Loop                          â”‚
-â”‚  1. Execute all sync code (call stack empty)            â”‚
-â”‚  2. Process ALL microtasks                              â”‚
-â”‚  3. Render (if needed)                                  â”‚
-â”‚  4. Process ONE macrotask                               â”‚
-â”‚  5. Repeat                                              â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-         â”‚                              â”‚
-         â–¼                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚   Microtask     â”‚          â”‚   Macrotask     â”‚
-â”‚     Queue       â”‚          â”‚     Queue       â”‚
-â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚          â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”‚
-â”‚ â€¢ Promise.then  â”‚          â”‚ â€¢ setTimeout    â”‚
-â”‚ â€¢ queueMicrotaskâ”‚          â”‚ â€¢ setInterval   â”‚
-â”‚ â€¢ MutationObs   â”‚          â”‚ â€¢ setImmediate  â”‚
-â”‚ â€¢ process.next  â”‚          â”‚ â€¢ I/O callbacks â”‚
-â”‚   (Node.js)     â”‚          â”‚ â€¢ UI rendering  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────┐
+│                       Call Stack                         │
+│  (Currently executing synchronous code)                 │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ┼
+┌─────────────────────────────────────────────────────────┐
+│                      Event Loop                          │
+│  1. Execute all sync code (call stack empty)            │
+│  2. Process ALL microtasks                              │
+│  3. Render (if needed)                                  │
+│  4. Process ONE macrotask                               │
+│  5. Repeat                                              │
+└─────────────────────────────────────────────────────────┘
+         │                              │
+         ┼                              ┼
+┌─────────────────┐          ┌─────────────────┐
+│   Microtask     │          │   Macrotask     │
+│     Queue       │          │     Queue       │
+│─────────────────│          │─────────────────│
+│ • Promise.then  │          │ • setTimeout    │
+│ • queueMicrotask│          │ • setInterval   │
+│ • MutationObs   │          │ • setImmediate  │
+│ • process.next  │          │ • I/O callbacks │
+│   (Node.js)     │          │ • UI rendering  │
+└─────────────────┘          └─────────────────┘
 \`\`\`
 
 ## Execution Order Example
@@ -4383,7 +4383,7 @@ console.log('6'); // Sync
 ## Why This Matters
 
 \`\`\`javascript
-// âŒ Can block rendering
+// ❌ Can block rendering
 function processLargeArray(arr) {
   arr.forEach(item => {
     // Heavy computation
@@ -4393,7 +4393,7 @@ function processLargeArray(arr) {
 // All promises queue as microtasks
 // Rendering blocked until ALL complete
 
-// âœ… Allow rendering between chunks
+// ✅ Allow rendering between chunks
 function processLargeArrayBetter(arr) {
   let index = 0;
   
@@ -4447,13 +4447,13 @@ setTimeout(() => console.log('timeout'), 0);
 ### 1. Forgotten Event Listeners
 
 \`\`\`typescript
-// âŒ Memory leak
+// ❌ Memory leak
 useEffect(() => {
   window.addEventListener('resize', handleResize);
   // Missing cleanup!
 }, []);
 
-// âœ… Fixed
+// ✅ Fixed
 useEffect(() => {
   window.addEventListener('resize', handleResize);
   return () => window.removeEventListener('resize', handleResize);
@@ -4463,12 +4463,12 @@ useEffect(() => {
 ### 2. Uncleared Timers
 
 \`\`\`typescript
-// âŒ Memory leak
+// ❌ Memory leak
 useEffect(() => {
   setInterval(pollData, 1000);
 }, []);
 
-// âœ… Fixed
+// ✅ Fixed
 useEffect(() => {
   const id = setInterval(pollData, 1000);
   return () => clearInterval(id);
@@ -4478,7 +4478,7 @@ useEffect(() => {
 ### 3. Closures Holding References
 
 \`\`\`typescript
-// âŒ Large array kept in memory
+// ❌ Large array kept in memory
 function createHandler() {
   const largeData = new Array(1000000).fill('x');
   
@@ -4487,7 +4487,7 @@ function createHandler() {
   };
 }
 
-// âœ… Only keep what's needed
+// ✅ Only keep what's needed
 function createHandler() {
   const largeData = new Array(1000000).fill('x');
   const length = largeData.length; // Extract needed value
@@ -4501,7 +4501,7 @@ function createHandler() {
 ### 4. Detached DOM Nodes
 
 \`\`\`typescript
-// âŒ DOM node kept in memory
+// ❌ DOM node kept in memory
 let cachedElement: HTMLElement | null = null;
 
 function cacheElement() {
@@ -4510,7 +4510,7 @@ function cacheElement() {
   // cachedElement still references removed node
 }
 
-// âœ… Clear reference
+// ✅ Clear reference
 function cleanup() {
   cachedElement = null;
 }
@@ -4519,12 +4519,12 @@ function cleanup() {
 ### 5. Forgotten Subscriptions
 
 \`\`\`typescript
-// âŒ Memory leak
+// ❌ Memory leak
 useEffect(() => {
   const subscription = observable.subscribe(handleData);
 }, []);
 
-// âœ… Fixed
+// ✅ Fixed
 useEffect(() => {
   const subscription = observable.subscribe(handleData);
   return () => subscription.unsubscribe();
@@ -4861,7 +4861,7 @@ const reactInternalsQuestions: CreateQuestionInput[] = [
 
 \`\`\`
 Old React (synchronous):
-render() â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º commit
+render() ─────────────────────────────────► commit
           Can't interrupt! (blocking)
 
 Problem: Large updates block the main thread
@@ -4874,9 +4874,9 @@ Problem: Large updates block the main thread
 
 \`\`\`
 With Fiber (interruptible):
-render â”€â”€â–º pause â”€â”€â–º handle input â”€â”€â–º resume â”€â”€â–º commit
-          â”‚                            â”‚
-          â””â”€â”€ Work can be interrupted â”€â”˜
+render ──► pause ──► handle input ──► resume ──► commit
+          │                            │
+          └── Work can be interrupted ─┘
 \`\`\`
 
 ### Fiber Node Structure
@@ -4912,21 +4912,21 @@ interface Fiber {
 
 \`\`\`
 Phase 1: Render (interruptible)
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Build work-in-progress Fiber tree          â”‚
-â”‚  â€¢ Can be paused, aborted, restarted        â”‚
-â”‚  â€¢ No side effects                          â”‚
-â”‚  â€¢ Pure calculation of what changed         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                    â”‚
-                    â–¼
+┌─────────────────────────────────────────────┐
+│  Build work-in-progress Fiber tree          │
+│  • Can be paused, aborted, restarted        │
+│  • No side effects                          │
+│  • Pure calculation of what changed         │
+└─────────────────────────────────────────────┘
+                    │
+                    ┼
 Phase 2: Commit (synchronous)
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Apply changes to DOM                        â”‚
-â”‚  â€¢ Cannot be interrupted                    â”‚
-â”‚  â€¢ Runs effects (useEffect, useLayoutEffect)â”‚
-â”‚  â€¢ Must complete in one go                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────┐
+│  Apply changes to DOM                        │
+│  • Cannot be interrupted                    │
+│  • Runs effects (useEffect, useLayoutEffect)│
+│  • Must complete in one go                  │
+└─────────────────────────────────────────────┘
 \`\`\`
 
 ## Priority Lanes
@@ -4996,7 +4996,7 @@ React's reconciliation compares the old and new virtual DOM trees to determine t
 
 React uses two heuristics for O(n) complexity:
 
-**1. Different types â†’ Full rebuild**
+**1. Different types → Full rebuild**
 \`\`\`tsx
 // Old tree
 <div>
@@ -5012,7 +5012,7 @@ React uses two heuristics for O(n) complexity:
 // Counter loses all state
 \`\`\`
 
-**2. Same type â†’ Update attributes/props**
+**2. Same type → Update attributes/props**
 \`\`\`tsx
 // Old
 <div className="old" title="old" />
@@ -5030,7 +5030,7 @@ React uses two heuristics for O(n) complexity:
 // Without keys - positional comparison
 // Old: [A, B, C]
 // New: [B, C, A]
-// React thinks: Update Aâ†’B, Update Bâ†’C, Update Câ†’A
+// React thinks: Update A→B, Update B→C, Update C→A
 // 3 updates!
 
 // With keys - identity-based comparison  
@@ -5056,9 +5056,9 @@ React uses two heuristics for O(n) complexity:
 // New:  key=0(Banana) | key=1(Cherry)
 //
 // React compares by key:
-// - key=0: Appleâ†’Banana (UPDATE, not delete!)
-// - key=1: Bananaâ†’Cherry (UPDATE)
-// - key=2: Cherryâ†’(removed)
+// - key=0: Apple→Banana (UPDATE, not delete!)
+// - key=1: Banana→Cherry (UPDATE)
+// - key=2: Cherry→(removed)
 //
 // Input state in ListItem gets misaligned!
 \`\`\`
@@ -5097,22 +5097,22 @@ function reconcileChildren(
 ### Key Best Practices
 
 \`\`\`tsx
-// âœ… Good: Stable, unique ID
+// ✅ Good: Stable, unique ID
 {items.map(item => (
   <Item key={item.id} data={item} />
 ))}
 
-// âœ… Good: Composite key when no ID
+// ✅ Good: Composite key when no ID
 {items.map(item => (
   <Item key={\`\${item.category}-\${item.name}\`} data={item} />
 ))}
 
-// âŒ Bad: Array index (causes bugs with reordering)
+// ❌ Bad: Array index (causes bugs with reordering)
 {items.map((item, index) => (
   <Item key={index} data={item} />
 ))}
 
-// âŒ Bad: Random value (causes full remount every render)
+// ❌ Bad: Random value (causes full remount every render)
 {items.map(item => (
   <Item key={Math.random()} data={item} />
 ))}
@@ -5140,20 +5140,20 @@ function reconcileChildren(
 
 \`\`\`
 Server                           Client
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Render to HTML â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Parse HTML     â”‚
-â”‚                â”‚              â”‚ (visible)      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                                        â”‚
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Send JS bundle â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Download JS    â”‚
-â”‚ (entire app)   â”‚              â”‚ (large bundle) â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                                        â”‚
-                                â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”
-                                â”‚ Hydrate        â”‚
-                                â”‚ (interactive)  â”‚
-                                â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌────────────────┐              ┌────────────────┐
+│ Render to HTML │ ──────────►  │ Parse HTML     │
+│                │              │ (visible)      │
+└────────────────┘              └────────────────┘
+                                        │
+┌────────────────┐              ┌───────┼────────┐
+│ Send JS bundle │ ──────────►  │ Download JS    │
+│ (entire app)   │              │ (large bundle) │
+└────────────────┘              └────────────────┘
+                                        │
+                                ┌───────┼────────┐
+                                │ Hydrate        │
+                                │ (interactive)  │
+                                └────────────────┘
 
 Problems:
 - Full JS bundle downloaded even for static content
@@ -5165,21 +5165,21 @@ Problems:
 
 \`\`\`
 Server                           Client
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Execute RSC    â”‚              â”‚                â”‚
-â”‚ (data fetching)â”‚              â”‚                â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â”‚                â”‚
-        â”‚                       â”‚                â”‚
-â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”              â”‚                â”‚
-â”‚ Stream RSC     â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Render RSC     â”‚
-â”‚ payload (JSON) â”‚              â”‚ output         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â”‚ (no hydration) â”‚
-        â”‚                       â”‚                â”‚
-â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”              â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ Send ONLY      â”‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º  â”‚ Hydrate only   â”‚
-â”‚ client         â”‚              â”‚ client         â”‚
-â”‚ component JS   â”‚              â”‚ components     â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌────────────────┐              ┌────────────────┐
+│ Execute RSC    │              │                │
+│ (data fetching)│              │                │
+└───────┬────────┘              │                │
+        │                       │                │
+┌───────┼────────┐              │                │
+│ Stream RSC     │ ──────────►  │ Render RSC     │
+│ payload (JSON) │              │ output         │
+└───────┬────────┘              │ (no hydration) │
+        │                       │                │
+┌───────┼────────┐              ┌────────────────┤
+│ Send ONLY      │ ──────────►  │ Hydrate only   │
+│ client         │              │ client         │
+│ component JS   │              │ components     │
+└────────────────┘              └────────────────┘
 
 Benefits:
 - Zero JS for server components
@@ -5229,13 +5229,13 @@ function AddToCartButton({ productId }: { productId: string }) {
 // Server Component can render Client Components
 // but not vice versa (without children pattern)
 
-// âœ… Server renders Client
+// ✅ Server renders Client
 async function Page() {
   const data = await fetchData();
   return <ClientComponent initialData={data} />;
 }
 
-// âœ… Client receives Server children via props
+// ✅ Client receives Server children via props
 function ClientWrapper({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   return isOpen ? children : null;

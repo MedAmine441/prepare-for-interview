@@ -1,7 +1,7 @@
 // data/seed-data-part2.ts
 
-import type { CreateQuestionInput } from '@/types';
-import { QUESTION_CATEGORIES } from '@/types';
+import type { CreateQuestionInput } from "@/types";
+import { QUESTION_CATEGORIES } from "@/types";
 
 // ============================================================================
 // FEATURE FLAGS (continued)
@@ -10,22 +10,22 @@ import { QUESTION_CATEGORIES } from '@/types';
 const featureFlagsQuestionsContinued: CreateQuestionInput[] = [
   {
     category: QUESTION_CATEGORIES.FEATURE_FLAGS,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'How do feature flags enable trunk-based development? What are the best practices for managing long-lived feature flags?',
+      "How do feature flags enable trunk-based development? What are the best practices for managing long-lived feature flags?",
     answer: `## Trunk-Based Development with Feature Flags
 
 \`\`\`
 Traditional Git Flow:
-main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º
+main ─────────────────────────────────────────────►
        \\                                    /
-        feature/new-checkout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º (merge after weeks)
+        feature/new-checkout ──────────────► (merge after weeks)
          \\              /
           fix-1  fix-2  (conflicts accumulate)
 
 Trunk-Based with Flags:
-main â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â—â”€â–º
-      â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚ â”‚
+main ─────────────────────────────────────────────►
+      │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │
       (Small commits, always deployable, behind flags)
 \`\`\`
 
@@ -54,7 +54,7 @@ function CheckoutPage() {
 // Flag: 100% for beta + internal
 
 // Day 21: Gradual rollout
-// Flag: 10% â†’ 25% â†’ 50% â†’ 100%
+// Flag: 10% → 25% → 50% → 100%
 
 // Day 28: Remove flag (cleanup)
 function CheckoutPage() {
@@ -106,7 +106,7 @@ async function checkStaleFlags() {
 ### 3. Code Organization
 
 \`\`\`typescript
-// âŒ Bad: Flag checks scattered everywhere
+// ❌ Bad: Flag checks scattered everywhere
 function ProductPage() {
   const flagA = useFeatureFlag('feature-a');
   const flagB = useFeatureFlag('feature-b');
@@ -121,7 +121,7 @@ function ProductPage() {
   );
 }
 
-// âœ… Good: Centralized flag-dependent logic
+// ✅ Good: Centralized flag-dependent logic
 function ProductPage() {
   return <ProductPageContent />;
 }
@@ -212,31 +212,31 @@ function mockFeatureFlag(key: string, value: boolean) {
 }
 
 // Rule: Require comment explaining flag
-// âŒ Error
+// ❌ Error
 if (useFeatureFlag('xyz')) { ... }
 
-// âœ… OK
+// ✅ OK
 // FLAG: xyz - New checkout flow, remove by 2024-06-01
 // JIRA: PROJ-1234
 if (useFeatureFlag('xyz')) { ... }
 \`\`\``,
     keyPoints: [
-      'Understands trunk-based development benefits',
-      'Knows flag lifecycle (release, experiment, ops)',
-      'Implements automated cleanup reminders',
-      'Tests both flag states',
-      'Has flag removal checklist',
-      'Manages technical debt from flags',
+      "Understands trunk-based development benefits",
+      "Knows flag lifecycle (release, experiment, ops)",
+      "Implements automated cleanup reminders",
+      "Tests both flag states",
+      "Has flag removal checklist",
+      "Manages technical debt from flags",
     ],
     followUpQuestions: [
-      'How do you handle conflicts between flags?',
-      'What metrics indicate a flag is safe to remove?',
-      'How do you handle flags during incidents?',
-      'What about feature flags in microservices?',
+      "How do you handle conflicts between flags?",
+      "What metrics indicate a flag is safe to remove?",
+      "How do you handle flags during incidents?",
+      "What about feature flags in microservices?",
     ],
-    relatedTopics: ['trunk-based-development', 'ci-cd', 'technical-debt'],
-    source: 'seed',
-    commonAt: ['Companies practicing CI/CD'],
+    relatedTopics: ["trunk-based-development", "ci-cd", "technical-debt"],
+    source: "seed",
+    commonAt: ["Companies practicing CI/CD"],
   },
 ];
 
@@ -247,9 +247,9 @@ if (useFeatureFlag('xyz')) { ... }
 const cssLayoutQuestions: CreateQuestionInput[] = [
   {
     category: QUESTION_CATEGORIES.CSS_LAYOUT,
-    difficulty: 'senior',
+    difficulty: "senior",
     question:
-      'Explain the CSS stacking context. When is a new stacking context created, and how does it affect z-index behavior?',
+      "Explain the CSS stacking context. When is a new stacking context created, and how does it affect z-index behavior?",
     answer: `## What is a Stacking Context?
 
 A stacking context is a three-dimensional conceptualization of HTML elements along the z-axis. Elements within a stacking context are painted in a specific order, and z-index only works within the same stacking context.
@@ -258,22 +258,22 @@ A stacking context is a three-dimensional conceptualization of HTML elements alo
 Stacking Context Visualization:
 
 Screen (viewer)
-    â”‚
-    â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Root Stacking Context              â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
-â”‚  â”‚  Child Stacking Context A   â”‚    â”‚
-â”‚  â”‚  z-index: 1                 â”‚    â”‚
-â”‚  â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚    â”‚
-â”‚  â”‚  â”‚ Grandchild z:9999    â”‚   â”‚    â”‚  â† Cannot escape parent!
-â”‚  â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚    â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
-â”‚  â”‚  Child Stacking Context B   â”‚    â”‚
-â”‚  â”‚  z-index: 2                 â”‚    â”‚  â† Always above A, regardless
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚    of grandchild's z-index
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    │
+    ┼
+┌─────────────────────────────────────┐
+│  Root Stacking Context              │
+│  ┌─────────────────────────────┐    │
+│  │  Child Stacking Context A   │    │
+│  │  z-index: 1                 │    │
+│  │  ┌──────────────────────┐   │    │
+│  │  │ Grandchild z:9999    │   │    │  → Cannot escape parent!
+│  │  └──────────────────────┘   │    │
+│  └─────────────────────────────┘    │
+│  ┌─────────────────────────────┐    │
+│  │  Child Stacking Context B   │    │
+│  │  z-index: 2                 │    │  → Always above A, regardless
+│  └─────────────────────────────┘    │    of grandchild's z-index
+└─────────────────────────────────────┘
 \`\`\`
 
 ## What Creates a Stacking Context?
@@ -352,18 +352,18 @@ Screen (viewer)
 ### Issue 1: z-index Not Working
 
 \`\`\`css
-/* âŒ z-index has no effect without positioning */
+/* ❌ z-index has no effect without positioning */
 .broken {
   z-index: 9999;
 }
 
-/* âœ… Needs position */
+/* ✅ Needs position */
 .fixed {
   position: relative;
   z-index: 9999;
 }
 
-/* âœ… Or be a flex/grid child */
+/* ✅ Or be a flex/grid child */
 .flex-child {
   z-index: 9999; /* works if parent is flex/grid */
 }
@@ -424,15 +424,15 @@ function Modal({ children }: { children: React.ReactNode }) {
 
 \`\`\`
 Bottom (painted first)
-â”‚
-â”œâ”€â”€ 1. Background/borders of stacking context element
-â”œâ”€â”€ 2. Negative z-index children (in order)
-â”œâ”€â”€ 3. Block-level descendants (in DOM order)
-â”œâ”€â”€ 4. Floated descendants
-â”œâ”€â”€ 5. Inline descendants
-â”œâ”€â”€ 6. z-index: 0 or auto positioned descendants
-â”œâ”€â”€ 7. Positive z-index children (in order)
-â”‚
+│
+┌── 1. Background/borders of stacking context element
+┌── 2. Negative z-index children (in order)
+┌── 3. Block-level descendants (in DOM order)
+┌── 4. Floated descendants
+┌── 5. Inline descendants
+┌── 6. z-index: 0 or auto positioned descendants
+┌── 7. Positive z-index children (in order)
+│
 Top (painted last)
 \`\`\`
 
@@ -503,42 +503,42 @@ findStackingContexts();
 }
 \`\`\``,
     keyPoints: [
-      'Knows what creates a stacking context',
-      'Understands z-index scope limitations',
-      'Can debug stacking issues',
-      'Uses portals for escaping contexts',
-      'Has organized z-index scale',
-      'Uses isolation: isolate intentionally',
+      "Knows what creates a stacking context",
+      "Understands z-index scope limitations",
+      "Can debug stacking issues",
+      "Uses portals for escaping contexts",
+      "Has organized z-index scale",
+      "Uses isolation: isolate intentionally",
     ],
     followUpQuestions: [
-      'How do you handle z-index in a component library?',
-      'What about stacking contexts in iframes?',
-      'How does paint order affect performance?',
-      'What\'s the difference between z-index and layer promotion?',
+      "How do you handle z-index in a component library?",
+      "What about stacking contexts in iframes?",
+      "How does paint order affect performance?",
+      "What's the difference between z-index and layer promotion?",
     ],
-    relatedTopics: ['css', 'layout', 'debugging', 'portals'],
-    source: 'seed',
-    commonAt: ['Companies with complex UIs'],
+    relatedTopics: ["css", "layout", "debugging", "portals"],
+    source: "seed",
+    commonAt: ["Companies with complex UIs"],
   },
   {
     category: QUESTION_CATEGORIES.CSS_LAYOUT,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'When would you use CSS Grid vs Flexbox? Explain the key differences and provide examples of when each is more appropriate.',
+      "When would you use CSS Grid vs Flexbox? Explain the key differences and provide examples of when each is more appropriate.",
     answer: `## Fundamental Difference
 
 \`\`\`
 Flexbox: ONE-dimensional layout (row OR column)
-â”Œâ”€â”€â”€â”¬â”€â”€â”€â”¬â”€â”€â”€â”¬â”€â”€â”€â”
-â”‚ 1 â”‚ 2 â”‚ 3 â”‚ 4 â”‚  â† Items flow in one direction
-â””â”€â”€â”€â”´â”€â”€â”€â”´â”€â”€â”€â”´â”€â”€â”€â”˜
+┌───┬───┬───┬───┐
+│ 1 │ 2 │ 3 │ 4 │  → Items flow in one direction
+└───┬───┬───┬───┘
 
 Grid: TWO-dimensional layout (rows AND columns)
-â”Œâ”€â”€â”€â”¬â”€â”€â”€â”¬â”€â”€â”€â”
-â”‚ 1 â”‚ 2 â”‚ 3 â”‚  â† Items placed in 2D grid
-â”œâ”€â”€â”€â”¼â”€â”€â”€â”¼â”€â”€â”€â”¤
-â”‚ 4 â”‚ 5 â”‚ 6 â”‚
-â””â”€â”€â”€â”´â”€â”€â”€â”´â”€â”€â”€â”˜
+┌───┬───┬───┐
+│ 1 │ 2 │ 3 │  → Items placed in 2D grid
+┌───┼───┼───┤
+│ 4 │ 5 │ 6 │
+└───┬───┬───┘
 \`\`\`
 
 ## When to Use Flexbox
@@ -686,8 +686,8 @@ Grid: TWO-dimensional layout (rows AND columns)
 |---------|---------|------|
 | Direction | Single axis | Both axes |
 | Item sizing | Content-based | Grid-based or content |
-| Gap support | âœ… | âœ… |
-| Alignment | âœ… | âœ… |
+| Gap support | ✅ | ✅ |
+| Alignment | ✅ | ✅ |
 | Explicit placement | Limited | Full control |
 | Dense packing | No | Yes (grid-auto-flow: dense) |
 | Subgrid | No | Yes |
@@ -763,64 +763,64 @@ Often the best approach uses both:
 
 \`\`\`
 Is it a 2D layout with rows AND columns?
-â”‚
-â”œâ”€â”€ Yes â†’ Use Grid
-â”‚   â””â”€â”€ Examples: Page layout, dashboard, image gallery
-â”‚
-â””â”€â”€ No â†’ Is content flowing in one direction?
-    â”‚
-    â”œâ”€â”€ Yes â†’ Use Flexbox
-    â”‚   â””â”€â”€ Examples: Navbar, buttons, form row
-    â”‚
-    â””â”€â”€ Both work â†’ Consider:
-        â€¢ Grid: When you need precise control
-        â€¢ Flexbox: When content should dictate size
+│
+┌── Yes → Use Grid
+│   └── Examples: Page layout, dashboard, image gallery
+│
+└── No → Is content flowing in one direction?
+    │
+    ┌── Yes → Use Flexbox
+    │   └── Examples: Navbar, buttons, form row
+    │
+    └── Both work → Consider:
+        • Grid: When you need precise control
+        • Flexbox: When content should dictate size
 \`\`\``,
     keyPoints: [
-      'Understands 1D vs 2D layout distinction',
-      'Knows when flexbox excels (centering, single-axis)',
-      'Knows when grid excels (complex layouts, grids)',
-      'Can combine both effectively',
-      'Familiar with modern features (subgrid)',
-      'Has decision framework for choosing',
+      "Understands 1D vs 2D layout distinction",
+      "Knows when flexbox excels (centering, single-axis)",
+      "Knows when grid excels (complex layouts, grids)",
+      "Can combine both effectively",
+      "Familiar with modern features (subgrid)",
+      "Has decision framework for choosing",
     ],
     followUpQuestions: [
-      'How would you handle fallbacks for older browsers?',
-      'What about performance differences?',
-      'How does subgrid help with component alignment?',
-      'When would you use CSS Columns instead?',
+      "How would you handle fallbacks for older browsers?",
+      "What about performance differences?",
+      "How does subgrid help with component alignment?",
+      "When would you use CSS Columns instead?",
     ],
-    relatedTopics: ['css', 'flexbox', 'grid', 'responsive-design'],
-    source: 'seed',
-    commonAt: ['General frontend knowledge'],
+    relatedTopics: ["css", "flexbox", "grid", "responsive-design"],
+    source: "seed",
+    commonAt: ["General frontend knowledge"],
   },
   {
     category: QUESTION_CATEGORIES.CSS_LAYOUT,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'What is the Block Formatting Context (BFC) in CSS? How do you create one, and why would you need to?',
+      "What is the Block Formatting Context (BFC) in CSS? How do you create one, and why would you need to?",
     answer: `## What is a BFC?
 
 A Block Formatting Context (BFC) is an independent layout environment where the internal layout doesn't affect the external layout and vice versa.
 
 \`\`\`
 Without BFC:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Parent                          â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
-â”‚  â”‚ Float left              â”‚    â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
-â”‚                                 â”‚ â† Parent collapses! Float escapes
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────┐
+│ Parent                          │
+│  ┌─────────────────────────┐    │
+│  │ Float left              │    │
+│  └─────────────────────────┘    │
+│                                 │ → Parent collapses! Float escapes
+└─────────────────────────────────┘
 
 With BFC:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Parent (BFC)                    â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
-â”‚  â”‚ Float left              â”‚    â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
-â”‚                                 â”‚ â† Parent contains float
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────┐
+│ Parent (BFC)                    │
+│  ┌─────────────────────────┐    │
+│  │ Float left              │    │
+│  └─────────────────────────┘    │
+│                                 │ → Parent contains float
+└─────────────────────────────────┘
 \`\`\`
 
 ## How to Create a BFC
@@ -943,20 +943,20 @@ With BFC:
 
 \`\`\`
 Without BFC on main:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚Sidebar â”‚ Main content wraps around   â”‚
-â”‚        â”‚ the sidebar when there's    â”‚
-â”‚        â”‚ enough text to fill...      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-         â”‚ ...the rest continues here  â”‚
-         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌────────┬─────────────────────────────┐
+│Sidebar │ Main content wraps around   │
+│        │ the sidebar when there's    │
+│        │ enough text to fill...      │
+└────────┬─────────────────────────────┤
+         │ ...the rest continues here  │
+         └─────────────────────────────┘
 
 With BFC on main:
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚Sidebar â”‚ Main content stays          â”‚
-â”‚        â”‚ completely separate from    â”‚
-â”‚        â”‚ the sidebar float           â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌────────┬─────────────────────────────┐
+│Sidebar │ Main content stays          │
+│        │ completely separate from    │
+│        │ the sidebar float           │
+└────────┬─────────────────────────────┘
 \`\`\`
 
 ### 4. Preventing Layout Interference
@@ -975,16 +975,16 @@ With BFC on main:
 /* overflow: hidden has side effects */
 .container {
   overflow: hidden;
-  /* âŒ Clips overflowing content (tooltips, dropdowns) */
-  /* âŒ Hides scrollbars */
+  /* ❌ Clips overflowing content (tooltips, dropdowns) */
+  /* ❌ Hides scrollbars */
 }
 
 /* display: flow-root is purpose-built */
 .container {
   display: flow-root;
-  /* âœ… Creates BFC without side effects */
-  /* âœ… No clipping */
-  /* âœ… Clear semantic intent */
+  /* ✅ Creates BFC without side effects */
+  /* ✅ No clipping */
+  /* ✅ Clear semantic intent */
 }
 \`\`\`
 
@@ -1042,22 +1042,22 @@ While BFC is still relevant, modern layout often uses:
 | position: absolute | Removes from flow | Absolutely positioned |
 | display: inline-block | Inline behavior | Inline BFC |`,
     keyPoints: [
-      'Understands BFC as isolated layout context',
-      'Knows multiple ways to create BFC',
-      'Can use BFC for containing floats',
-      'Understands margin collapse prevention',
-      'Prefers display: flow-root for clarity',
-      'Knows when modern layout is better',
+      "Understands BFC as isolated layout context",
+      "Knows multiple ways to create BFC",
+      "Can use BFC for containing floats",
+      "Understands margin collapse prevention",
+      "Prefers display: flow-root for clarity",
+      "Knows when modern layout is better",
     ],
     followUpQuestions: [
-      'How does BFC interact with stacking contexts?',
-      'What about inline formatting context?',
-      'How do CSS Containment and BFC relate?',
-      'When would you still use floats today?',
+      "How does BFC interact with stacking contexts?",
+      "What about inline formatting context?",
+      "How do CSS Containment and BFC relate?",
+      "When would you still use floats today?",
     ],
-    relatedTopics: ['css', 'layout', 'floats', 'margin-collapse'],
-    source: 'seed',
-    commonAt: ['Companies maintaining legacy CSS'],
+    relatedTopics: ["css", "layout", "floats", "margin-collapse"],
+    source: "seed",
+    commonAt: ["Companies maintaining legacy CSS"],
   },
 ];
 
@@ -1068,40 +1068,40 @@ While BFC is still relevant, modern layout often uses:
 const jsEventLoopQuestions: CreateQuestionInput[] = [
   {
     category: QUESTION_CATEGORIES.JS_EVENT_LOOP,
-    difficulty: 'senior',
+    difficulty: "senior",
     question:
-      'Explain the JavaScript event loop in detail. What is the difference between microtasks and macrotasks? Walk through the execution order of a complex example.',
+      "Explain the JavaScript event loop in detail. What is the difference between microtasks and macrotasks? Walk through the execution order of a complex example.",
     answer: `## Event Loop Architecture
 
 \`\`\`
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         Call Stack                              â”‚
-â”‚                    (Currently executing)                        â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         Event Loop                              â”‚
-â”‚                                                                 â”‚
-â”‚   1. Execute all code in Call Stack                             â”‚
-â”‚   2. Execute ALL microtasks (until queue empty)                 â”‚
-â”‚   3. Render if needed (requestAnimationFrame)                   â”‚
-â”‚   4. Execute ONE macrotask                                      â”‚
-â”‚   5. Go to step 1                                               â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-         â”‚                                              â”‚
-         â–¼                                              â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚   Microtask Queue    â”‚                    â”‚   Macrotask Queue    â”‚
-â”‚   (Higher priority)  â”‚                    â”‚   (Lower priority)   â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤                    â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ â€¢ Promise.then/catch â”‚                    â”‚ â€¢ setTimeout         â”‚
-â”‚ â€¢ queueMicrotask()   â”‚                    â”‚ â€¢ setInterval        â”‚
-â”‚ â€¢ MutationObserver   â”‚                    â”‚ â€¢ setImmediate       â”‚
-â”‚ â€¢ process.nextTick   â”‚                    â”‚ â€¢ I/O callbacks      â”‚
-â”‚   (Node.js)          â”‚                    â”‚ â€¢ UI rendering       â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                    â”‚ â€¢ requestAnimationFrame â”‚
-                                            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────────────────────────────────┐
+│                         Call Stack                              │
+│                    (Currently executing)                        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ┼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Event Loop                              │
+│                                                                 │
+│   1. Execute all code in Call Stack                             │
+│   2. Execute ALL microtasks (until queue empty)                 │
+│   3. Render if needed (requestAnimationFrame)                   │
+│   4. Execute ONE macrotask                                      │
+│   5. Go to step 1                                               │
+└─────────────────────────────────────────────────────────────────┘
+         │                                              │
+         ┼                                              ┼
+┌──────────────────────┐                    ┌──────────────────────┐
+│   Microtask Queue    │                    │   Macrotask Queue    │
+│   (Higher priority)  │                    │   (Lower priority)   │
+┌──────────────────────┤                    ┌──────────────────────┤
+│ • Promise.then/catch │                    │ • setTimeout         │
+│ • queueMicrotask()   │                    │ • setInterval        │
+│ • MutationObserver   │                    │ • setImmediate       │
+│ • process.nextTick   │                    │ • I/O callbacks      │
+│   (Node.js)          │                    │ • UI rendering       │
+└──────────────────────┘                    │ • requestAnimationFrame │
+                                            └──────────────────────┘
 \`\`\`
 
 ## Microtasks vs Macrotasks
@@ -1142,30 +1142,30 @@ console.log('8: Script end');
 
 \`\`\`
 Step 1: Execute synchronous code
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Call Stack: [main]
 Output: "1: Script start"
 
 Step 2: setTimeout scheduled
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Macrotask Queue: [setTimeout callback]
 (Timer starts, callback will be queued when timer fires)
 
 Step 3: Promise.resolve().then() scheduled
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Microtask Queue: [Promise 1 callback]
 
 Step 4: queueMicrotask scheduled
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Microtask Queue: [Promise 1 callback, queueMicrotask callback]
 
 Step 5: Continue synchronous execution
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Output: "8: Script end"
 Call Stack: [] (empty)
 
 Step 6: Process ALL microtasks
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Execute "Promise 1 callback":
   Output: "4: Promise 1"
   Queues: new microtask (step 5), Promise 2 callback
@@ -1184,13 +1184,13 @@ Execute "Promise 2 callback":
 Microtask Queue: [] (empty)
 
 Step 7: Process ONE macrotask
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Execute "setTimeout callback":
   Output: "2: setTimeout"
   Queues: new Promise microtask
 
 Step 8: Process ALL microtasks again
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+───────────────────────────────
 Execute "Promise inside setTimeout":
   Output: "3: Promise inside setTimeout"
 
@@ -1243,7 +1243,7 @@ Event Loop with rAF:
 ### Infinite Microtask Loop
 
 \`\`\`typescript
-// âŒ This blocks everything!
+// ❌ This blocks everything!
 function infiniteMicrotasks() {
   Promise.resolve().then(infiniteMicrotasks);
 }
@@ -1341,28 +1341,28 @@ function scheduleUpdate(fn: () => void) {
 }
 \`\`\``,
     keyPoints: [
-      'Understands event loop phases',
-      'Knows microtask vs macrotask timing',
-      'Can trace complex execution order',
-      'Understands async/await as microtasks',
-      'Knows rAF timing in the loop',
-      'Can apply knowledge practically',
+      "Understands event loop phases",
+      "Knows microtask vs macrotask timing",
+      "Can trace complex execution order",
+      "Understands async/await as microtasks",
+      "Knows rAF timing in the loop",
+      "Can apply knowledge practically",
     ],
     followUpQuestions: [
-      'How does the event loop differ in Node.js?',
-      'How would you debug event loop issues?',
+      "How does the event loop differ in Node.js?",
+      "How would you debug event loop issues?",
       'What causes "long tasks" in performance traces?',
-      'How do Web Workers relate to the event loop?',
+      "How do Web Workers relate to the event loop?",
     ],
-    relatedTopics: ['async', 'promises', 'performance', 'javascript-runtime'],
-    source: 'seed',
-    commonAt: ['Any JS-heavy company'],
+    relatedTopics: ["async", "promises", "performance", "javascript-runtime"],
+    source: "seed",
+    commonAt: ["Any JS-heavy company"],
   },
   {
     category: QUESTION_CATEGORIES.JS_EVENT_LOOP,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'How do async/await work under the hood? What happens when you await a promise, and how does it relate to the event loop?',
+      "How do async/await work under the hood? What happens when you await a promise, and how does it relate to the event loop?",
     answer: `## async/await as Syntax Sugar
 
 async/await is syntactic sugar over Promises and generators. Understanding this helps predict execution order.
@@ -1399,7 +1399,7 @@ function fetchUser() {
 async function example() {
   console.log('A'); // Synchronous
   
-  await Promise.resolve(); // â† Suspension point
+  await Promise.resolve(); // → Suspension point
   
   console.log('B'); // Runs as microtask
 }
@@ -1418,16 +1418,16 @@ console.log('2');
 ### Detailed Breakdown
 
 \`\`\`
-1. console.log('1') executes â†’ Output: "1"
+1. console.log('1') executes → Output: "1"
 2. example() called
-3. console.log('A') executes â†’ Output: "A"  
+3. console.log('A') executes → Output: "A"  
 4. await Promise.resolve() encountered:
    - Promise is already resolved
    - BUT code after await is still scheduled as microtask
    - Function suspends, returns implicit Promise
-5. console.log('2') executes â†’ Output: "2"
+5. console.log('2') executes → Output: "2"
 6. Call stack empty, microtasks run
-7. console.log('B') executes â†’ Output: "B"
+7. console.log('B') executes → Output: "B"
 \`\`\`
 
 ## await with Different Values
@@ -1464,19 +1464,19 @@ console.log('end');
 \`\`\`
 Execution Trace:
 
-â”‚ Call Stack          â”‚ Microtask Queue        â”‚ Output
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€
-â”‚ [main]              â”‚ []                     â”‚ "start"
-â”‚ [main, outer]       â”‚ []                     â”‚ "outer-1"
-â”‚ [main, outer, inner]â”‚ []                     â”‚ "inner-1"
-â”‚ [main, outer, inner]â”‚ [inner continuation]   â”‚ (await, suspend inner)
-â”‚ [main, outer]       â”‚ [inner continuation,   â”‚ (await, suspend outer)
-â”‚                     â”‚  outer continuation]   â”‚
-â”‚ [main]              â”‚ [inner cont, outer cont]â”‚ "end"
-â”‚ []                  â”‚ [inner cont, outer cont]â”‚ 
-â”‚ [inner continuation]â”‚ [outer continuation]   â”‚ "inner-2"
-â”‚ []                  â”‚ [outer continuation]   â”‚
-â”‚ [outer continuation]â”‚ []                     â”‚ "outer-2"
+│ Call Stack          │ Microtask Queue        │ Output
+┌─────────────────────┼────────────────────────┼────────
+│ [main]              │ []                     │ "start"
+│ [main, outer]       │ []                     │ "outer-1"
+│ [main, outer, inner]│ []                     │ "inner-1"
+│ [main, outer, inner]│ [inner continuation]   │ (await, suspend inner)
+│ [main, outer]       │ [inner continuation,   │ (await, suspend outer)
+│                     │  outer continuation]   │
+│ [main]              │ [inner cont, outer cont]│ "end"
+│ []                  │ [inner cont, outer cont]│ 
+│ [inner continuation]│ [outer continuation]   │ "inner-2"
+│ []                  │ [outer continuation]   │
+│ [outer continuation]│ []                     │ "outer-2"
 
 Final Output: start, outer-1, inner-1, end, inner-2, outer-2
 \`\`\`
@@ -1504,13 +1504,13 @@ function withError() {
 ### Unhandled Rejections
 
 \`\`\`typescript
-// âŒ Unhandled rejection - no try/catch, no .catch()
+// ❌ Unhandled rejection - no try/catch, no .catch()
 async function risky() {
   await Promise.reject(new Error('Oops'));
 }
 risky(); // UnhandledPromiseRejectionWarning
 
-// âœ… Handled
+// ✅ Handled
 async function safe() {
   try {
     await Promise.reject(new Error('Oops'));
@@ -1519,7 +1519,7 @@ async function safe() {
   }
 }
 
-// âœ… Or handle when calling
+// ✅ Or handle when calling
 risky().catch(console.error);
 \`\`\`
 
@@ -1545,14 +1545,14 @@ async function parallel() {
 }
 
 // Be careful with loops!
-// âŒ Sequential (slow)
+// ❌ Sequential (slow)
 async function processItems(items: Item[]) {
   for (const item of items) {
     await processItem(item);
   }
 }
 
-// âœ… Parallel
+// ✅ Parallel
 async function processItems(items: Item[]) {
   await Promise.all(items.map(item => processItem(item)));
 }
@@ -1610,22 +1610,22 @@ async function retry<T>(
 })();
 \`\`\``,
     keyPoints: [
-      'Knows async/await is Promise syntax sugar',
-      'Understands suspension points at await',
-      'Can trace execution order correctly',
-      'Knows parallel vs sequential patterns',
-      'Handles errors properly',
-      'Understands top-level await',
+      "Knows async/await is Promise syntax sugar",
+      "Understands suspension points at await",
+      "Can trace execution order correctly",
+      "Knows parallel vs sequential patterns",
+      "Handles errors properly",
+      "Understands top-level await",
     ],
     followUpQuestions: [
-      'How would you handle cleanup in async functions?',
-      'What about async generators?',
-      'How do async stack traces work?',
-      'When would you prefer raw Promises over async/await?',
+      "How would you handle cleanup in async functions?",
+      "What about async generators?",
+      "How do async stack traces work?",
+      "When would you prefer raw Promises over async/await?",
     ],
-    relatedTopics: ['promises', 'event-loop', 'error-handling'],
-    source: 'seed',
-    commonAt: ['General JavaScript knowledge'],
+    relatedTopics: ["promises", "event-loop", "error-handling"],
+    source: "seed",
+    commonAt: ["General JavaScript knowledge"],
   },
 ];
 
@@ -1636,9 +1636,9 @@ async function retry<T>(
 const accessibilityQuestions: CreateQuestionInput[] = [
   {
     category: QUESTION_CATEGORIES.ACCESSIBILITY,
-    difficulty: 'senior',
+    difficulty: "senior",
     question:
-      'How would you implement accessible keyboard navigation for a complex component like a dropdown menu or modal? Cover focus management, keyboard traps, and ARIA attributes.',
+      "How would you implement accessible keyboard navigation for a complex component like a dropdown menu or modal? Cover focus management, keyboard traps, and ARIA attributes.",
     answer: `## Modal Accessibility Implementation
 
 ### 1. Focus Management
@@ -1986,46 +1986,46 @@ function DropdownMenu({
 | Combobox | Arrow keys, filtering, aria-activedescendant |
 | Tree | Arrow keys (horizontal for expand), Home/End |`,
     keyPoints: [
-      'Implements proper focus management',
-      'Creates focus traps correctly',
-      'Handles all keyboard interactions',
-      'Uses correct ARIA attributes',
-      'Restores focus on close',
-      'Manages roving tabindex for menus',
+      "Implements proper focus management",
+      "Creates focus traps correctly",
+      "Handles all keyboard interactions",
+      "Uses correct ARIA attributes",
+      "Restores focus on close",
+      "Manages roving tabindex for menus",
     ],
     followUpQuestions: [
-      'How would you test these accessibility features?',
-      'What about touch device accessibility?',
-      'How do you handle dynamic content announcements?',
-      'What\'s the difference between aria-label and aria-labelledby?',
+      "How would you test these accessibility features?",
+      "What about touch device accessibility?",
+      "How do you handle dynamic content announcements?",
+      "What's the difference between aria-label and aria-labelledby?",
     ],
-    relatedTopics: ['a11y', 'keyboard-navigation', 'aria', 'focus-management'],
-    source: 'seed',
-    commonAt: ['Any company caring about accessibility'],
+    relatedTopics: ["a11y", "keyboard-navigation", "aria", "focus-management"],
+    source: "seed",
+    commonAt: ["Any company caring about accessibility"],
   },
   {
     category: QUESTION_CATEGORIES.ACCESSIBILITY,
-    difficulty: 'mid',
+    difficulty: "mid",
     question:
-      'What are the most common accessibility issues you\'ve encountered in React applications, and how do you fix them?',
+      "What are the most common accessibility issues you've encountered in React applications, and how do you fix them?",
     answer: `## Top Accessibility Issues & Fixes
 
 ### 1. Missing or Poor Alt Text
 
 \`\`\`tsx
-// âŒ Bad
+// ❌ Bad
 <img src="chart.png" />
 <img src="profile.jpg" alt="image" />
 <img src="icon.svg" alt="icon" />
 
-// âœ… Good - Descriptive alt for meaningful images
+// ✅ Good - Descriptive alt for meaningful images
 <img src="chart.png" alt="Q3 revenue increased 25% compared to Q2" />
 <img src="profile.jpg" alt="Jane Smith, CEO" />
 
-// âœ… Good - Empty alt for decorative images
+// ✅ Good - Empty alt for decorative images
 <img src="decorative-border.png" alt="" role="presentation" />
 
-// âœ… Good - Icon buttons need accessible name
+// ✅ Good - Icon buttons need accessible name
 <button aria-label="Close dialog">
   <img src="close-icon.svg" alt="" />
 </button>
@@ -2034,23 +2034,23 @@ function DropdownMenu({
 ### 2. Missing Form Labels
 
 \`\`\`tsx
-// âŒ Bad - No label
+// ❌ Bad - No label
 <input type="email" placeholder="Enter email" />
 
-// âŒ Bad - Placeholder is not a label
+// ❌ Bad - Placeholder is not a label
 <input type="email" placeholder="Email" />
 
-// âœ… Good - Explicit label
+// ✅ Good - Explicit label
 <label htmlFor="email">Email</label>
 <input type="email" id="email" />
 
-// âœ… Good - Implicit label (wrapping)
+// ✅ Good - Implicit label (wrapping)
 <label>
   Email
   <input type="email" />
 </label>
 
-// âœ… Good - Visually hidden but accessible
+// ✅ Good - Visually hidden but accessible
 <label htmlFor="search" className="sr-only">Search products</label>
 <input type="search" id="search" placeholder="Search..." />
 
@@ -2071,17 +2071,17 @@ function DropdownMenu({
 ### 3. Poor Color Contrast
 
 \`\`\`css
-/* âŒ Bad - Low contrast */
+/* ❌ Bad - Low contrast */
 .text {
   color: #999999; /* on white background - 2.8:1 ratio */
 }
 
-/* âœ… Good - Meets WCAG AA (4.5:1 for normal text) */
+/* ✅ Good - Meets WCAG AA (4.5:1 for normal text) */
 .text {
   color: #595959; /* on white background - 7:1 ratio */
 }
 
-/* âœ… Good - Large text can have lower contrast (3:1) */
+/* ✅ Good - Large text can have lower contrast (3:1) */
 .heading {
   font-size: 24px;
   font-weight: bold;
@@ -2092,7 +2092,7 @@ function DropdownMenu({
 ### 4. Non-Semantic HTML
 
 \`\`\`tsx
-// âŒ Bad - Div soup
+// ❌ Bad - Div soup
 <div className="header">
   <div className="nav">
     <div onClick={goHome}>Home</div>
@@ -2100,7 +2100,7 @@ function DropdownMenu({
   </div>
 </div>
 
-// âœ… Good - Semantic HTML
+// ✅ Good - Semantic HTML
 <header>
   <nav aria-label="Main navigation">
     <a href="/">Home</a>
@@ -2123,14 +2123,14 @@ function DropdownMenu({
 ### 5. Click Handlers on Non-Interactive Elements
 
 \`\`\`tsx
-// âŒ Bad - Not keyboard accessible
+// ❌ Bad - Not keyboard accessible
 <div onClick={handleClick}>Click me</div>
 <span onClick={handleClick}>Action</span>
 
-// âœ… Good - Use button
+// ✅ Good - Use button
 <button onClick={handleClick}>Click me</button>
 
-// âœ… Good - If must use div, add all necessary attributes
+// ✅ Good - If must use div, add all necessary attributes
 <div
   role="button"
   tabIndex={0}
@@ -2145,14 +2145,14 @@ function DropdownMenu({
   Click me
 </div>
 
-// âœ… Better - Use a link for navigation
+// ✅ Better - Use a link for navigation
 <a href="/products">View Products</a>
 \`\`\`
 
 ### 6. Missing Skip Links
 
 \`\`\`tsx
-// âœ… Add skip link as first focusable element
+// ✅ Add skip link as first focusable element
 function App() {
   return (
     <>
@@ -2186,15 +2186,15 @@ function App() {
 ### 7. Auto-Playing Media
 
 \`\`\`tsx
-// âŒ Bad - Auto-plays without user control
+// ❌ Bad - Auto-plays without user control
 <video autoPlay src="intro.mp4" />
 
-// âœ… Good - Muted autoplay is acceptable, with controls
+// ✅ Good - Muted autoplay is acceptable, with controls
 <video autoPlay muted controls src="intro.mp4">
   <track kind="captions" src="captions.vtt" label="English" />
 </video>
 
-// âœ… Good - No autoplay, user initiates
+// ✅ Good - No autoplay, user initiates
 <video controls>
   <source src="intro.mp4" type="video/mp4" />
   <track kind="captions" src="captions.vtt" label="English" />
@@ -2204,12 +2204,12 @@ function App() {
 ### 8. Missing Heading Hierarchy
 
 \`\`\`tsx
-// âŒ Bad - Skipping levels, using for styling
+// ❌ Bad - Skipping levels, using for styling
 <h1>Page Title</h1>
 <h4>Section</h4>  {/* Skipped h2, h3 */}
 <h2>Another Section</h2>
 
-// âœ… Good - Proper hierarchy
+// ✅ Good - Proper hierarchy
 <h1>Page Title</h1>
 <h2>Section</h2>
 <h3>Subsection</h3>
@@ -2222,15 +2222,15 @@ function App() {
 ### 9. Missing Error Announcements
 
 \`\`\`tsx
-// âŒ Bad - Errors only visible, not announced
+// ❌ Bad - Errors only visible, not announced
 {error && <span className="error">{error}</span>}
 
-// âœ… Good - Use aria-live for dynamic announcements
+// ✅ Good - Use aria-live for dynamic announcements
 <div aria-live="polite" aria-atomic="true">
   {error && <span role="alert">{error}</span>}
 </div>
 
-// âœ… Good - Associate error with input
+// ✅ Good - Associate error with input
 <input
   id="email"
   aria-invalid={!!error}
@@ -2242,7 +2242,7 @@ function App() {
 ### 10. Motion Without Respecting Preferences
 
 \`\`\`css
-/* âœ… Good - Respect user preferences */
+/* ✅ Good - Respect user preferences */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -2288,28 +2288,28 @@ function usePrefersReducedMotion() {
 - [ ] No keyboard traps (except modals)
 \`\`\``,
     keyPoints: [
-      'Knows common accessibility issues',
-      'Can fix alt text properly',
-      'Understands form labeling requirements',
-      'Uses semantic HTML correctly',
-      'Makes custom components keyboard accessible',
-      'Implements skip links and error announcements',
+      "Knows common accessibility issues",
+      "Can fix alt text properly",
+      "Understands form labeling requirements",
+      "Uses semantic HTML correctly",
+      "Makes custom components keyboard accessible",
+      "Implements skip links and error announcements",
     ],
     followUpQuestions: [
-      'How do you test for accessibility issues?',
-      'What tools do you use for accessibility auditing?',
-      'How do you prioritize accessibility fixes?',
-      'What about accessibility in SPAs vs traditional sites?',
+      "How do you test for accessibility issues?",
+      "What tools do you use for accessibility auditing?",
+      "How do you prioritize accessibility fixes?",
+      "What about accessibility in SPAs vs traditional sites?",
     ],
-    relatedTopics: ['a11y', 'semantic-html', 'wcag', 'screen-readers'],
-    source: 'seed',
-    commonAt: ['Any company with accessibility requirements'],
+    relatedTopics: ["a11y", "semantic-html", "wcag", "screen-readers"],
+    source: "seed",
+    commonAt: ["Any company with accessibility requirements"],
   },
 ];
 
-export { 
-  featureFlagsQuestionsContinued, 
-  cssLayoutQuestions, 
-  jsEventLoopQuestions, 
-  accessibilityQuestions 
+export {
+  featureFlagsQuestionsContinued,
+  cssLayoutQuestions,
+  jsEventLoopQuestions,
+  accessibilityQuestions,
 };

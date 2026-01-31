@@ -3,3 +3,6 @@ node_modules
 .env.local
 
 prompt.txt
+todo.txt
+temp_auto_push.bat
+temp_interactive_push.bat

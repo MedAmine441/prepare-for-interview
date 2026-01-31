@@ -1,108 +1,103 @@
 // src/app/flashcards/page.tsx
 
 import Link from "next/link";
-import { Suspense } from "react";
-import { ArrowRight, Clock, TrendingUp, Plus } from "lucide-react";
+import { ArrowRight, Plus, Clock } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
 
 export default function FlashcardsPage() {
   return (
-    <div className="min-h-screen">
-      <main className="container mx-auto px-4 py-8">
-        {/* Study Actions */}
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
-          <Link
-            href="/flashcards/study"
-            className="group p-6 rounded-xl border bg-card hover:border-primary hover:shadow-md transition-all"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Study Due Cards</h2>
-                <p className="text-muted-foreground mb-4">
-                  Review cards that are due for spaced repetition
-                </p>
-                <Suspense
-                  fallback={
-                    <div className="text-sm text-muted-foreground">
-                      Loading...
-                    </div>
-                  }
-                >
-                  <DueCardsSummary />
-                </Suspense>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <ArrowRight className="w-5 h-5 text-primary" />
-              </div>
-            </div>
-          </Link>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight mb-2">Flashcards</h1>
+        <p className="text-muted-foreground">
+          Study with spaced repetition to maximize retention.
+        </p>
+      </div>
 
-          <Link
-            href="/flashcards/new"
-            className="group p-6 rounded-xl border bg-card hover:border-primary hover:shadow-md transition-all"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Add New Question</h2>
-                <p className="text-muted-foreground mb-4">
-                  Create a custom flashcard with your own question
-                </p>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="flex items-center gap-1 text-green-600">
-                    <Plus className="w-4 h-4" />
-                    Create your own
-                  </span>
+      {/* Quick Actions */}
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        <Link href="/flashcards/study" className="group">
+          <Card className="h-full transition-colors hover:bg-secondary/50">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg">Study Due Cards</CardTitle>
+                  <CardDescription className="mt-1">
+                    Review cards scheduled for today
+                  </CardDescription>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center group-hover:bg-secondary/80 transition-colors">
+                  <ArrowRight className="w-5 h-5" />
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <ArrowRight className="w-5 h-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="w-4 h-4" />
+                <span>0 cards due</span>
               </div>
-            </div>
-          </Link>
-        </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        {/* Categories Grid */}
-        <h2 className="text-2xl font-bold mb-6">Study by Category</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.values(CATEGORY_METADATA).map((category) => (
-            <Link
-              key={category.slug}
-              href={`/flashcards/${category.slug}`}
-              className="group p-5 rounded-xl border bg-card hover:border-primary hover:shadow-md transition-all"
-            >
-              <div className="flex items-start gap-4">
-                <div
-                  className={`w-12 h-12 rounded-lg ${category.color} flex items-center justify-center shrink-0`}
-                >
-                  <span className="text-white text-xl">
+        <Link href="/flashcards/new" className="group">
+          <Card className="h-full transition-colors hover:bg-secondary/50">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg">Add Question</CardTitle>
+                  <CardDescription className="mt-1">
+                    Create a custom flashcard
+                  </CardDescription>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center group-hover:bg-secondary/80 transition-colors">
+                  <Plus className="w-5 h-5" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Add your own questions</span>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      <Separator className="mb-8" />
+
+      {/* Categories */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-1">Study by Topic</h2>
+        <p className="text-sm text-muted-foreground">Choose a category to focus on</p>
+      </div>
+
+      <div className="grid gap-3">
+        {Object.values(CATEGORY_METADATA).map((category) => (
+          <Link key={category.slug} href={`/flashcards/${category.slug}`} className="group">
+            <Card className="transition-colors hover:bg-secondary/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-md ${category.color} flex items-center justify-center text-white shrink-0`}>
                     {getCategoryEmoji(category.slug)}
-                  </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium">{category.name}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-1">
+                      {category.description}
+                    </p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold mb-1 group-hover:text-primary transition-colors">
-                    {category.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {category.description}
-                  </p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function DueCardsSummary() {
-  // This would fetch actual data from the database
-  // For now, showing placeholder
-  return (
-    <div className="flex items-center gap-4 text-sm">
-      <span className="flex items-center gap-1 text-orange-600">
-        <Clock className="w-4 h-4" />0 cards due
-      </span>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

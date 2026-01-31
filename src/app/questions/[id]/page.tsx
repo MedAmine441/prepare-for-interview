@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, Tag, Loader2 } from "lucide-react";
+import { ChevronRight, Clock, ArrowLeft } from "lucide-react";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
 import { getQuestionById } from "@/actions/question.actions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 interface QuestionPageProps {
   params: Promise<{
@@ -12,45 +16,23 @@ interface QuestionPageProps {
   }>;
 }
 
-export default async function QuestionDetailPage({
-  params,
-}: QuestionPageProps) {
+export default async function QuestionDetailPage({ params }: QuestionPageProps) {
   const { id } = await params;
 
-  // Fetch question from database
   const result = await getQuestionById(id);
 
   if (!result.success) {
-    // Show error page
     return (
-      <div className="min-h-screen">
-        <header className="border-b">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/questions"
-                className="p-2 rounded-lg hover:bg-accent transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <h1 className="font-semibold">Error</h1>
-            </div>
-          </div>
-        </header>
-        <main className="container mx-auto px-4 py-16 text-center">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">⚠️</span>
-          </div>
-          <h2 className="text-2xl font-bold mb-4">Error Loading Question</h2>
-          <p className="text-muted-foreground mb-8">{result.error}</p>
-          <Link
-            href="/questions"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Questions
-          </Link>
-        </main>
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="flex flex-col items-center justify-center py-16">
+          <p className="text-sm text-muted-foreground mb-4">{result.error}</p>
+          <Button asChild variant="outline">
+            <Link href="/questions">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Questions
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -62,162 +44,140 @@ export default async function QuestionDetailPage({
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/questions"
-              className="p-2 rounded-lg hover:bg-accent transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="font-semibold">Question Detail</h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="capitalize">
-                  {formatCategory(question.category)}
-                </span>
-                <span>•</span>
-                <span
-                  className={`capitalize ${getDifficultyColor(
-                    question.difficulty
-                  )}`}
-                >
-                  {question.difficulty}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+        <Link href="/questions" className="hover:text-foreground transition-colors">
+          Questions
+        </Link>
+        <ChevronRight className="w-4 h-4" />
+        <span className="text-foreground font-medium truncate max-w-[200px]">
+          {question.question.slice(0, 30)}...
+        </span>
+      </nav>
+
+      {/* Question */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight mb-4">{question.question}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge variant="secondary">{formatCategory(question.category)}</Badge>
+          <Badge variant="outline" className={getDifficultyColor(question.difficulty)}>
+            {question.difficulty}
+          </Badge>
+          <span className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Clock className="w-4 h-4" />
+            ~{getEstimatedTime(question.difficulty)} min
+          </span>
+          {question.source && (
+            <Badge variant="outline" className="text-xs">
+              {formatSource(question.source)}
+            </Badge>
+          )}
         </div>
-      </header>
+      </div>
 
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Question */}
-        <section className="mb-8">
-          <h2 className="text-2xl font-semibold mb-4">{question.question}</h2>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />~
-              {getEstimatedTime(question.difficulty)} min
-            </span>
-            <span className="flex items-center gap-1">
-              <Tag className="w-4 h-4" />
-              {formatCategory(question.category)}
-            </span>
-            {question.source && (
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs ${getSourceBadgeClass(
-                  question.source
-                )}`}
-              >
-                {formatSource(question.source)}
-              </span>
-            )}
-          </div>
-        </section>
-
-        {/* Answer */}
-        <section className="mb-8">
-          <h3 className="text-lg font-semibold mb-4">Model Answer</h3>
-          <div className="prose prose-slate dark:prose-invert max-w-none">
+      {/* Answer */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Model Answer</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="prose prose-sm max-w-none">
             <MarkdownRenderer content={question.answer} />
           </div>
-        </section>
+        </CardContent>
+      </Card>
 
-        {/* Key Points */}
-        {question.keyPoints.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-4">Key Points to Cover</h3>
+      {/* Key Points */}
+      {question.keyPoints.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Key Points</CardTitle>
+          </CardHeader>
+          <CardContent>
             <ul className="space-y-2">
               {question.keyPoints.map((point, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm shrink-0 mt-0.5">
+                <li key={i} className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-secondary text-foreground flex items-center justify-center text-xs font-medium shrink-0">
                     {i + 1}
                   </span>
-                  <span className="flex-1">{point}</span>
+                  <span className="text-sm">{point}</span>
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Follow-up Questions */}
-        {question.followUpQuestions.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-4">
-              Common Follow-up Questions
-            </h3>
+      {/* Follow-up Questions */}
+      {question.followUpQuestions.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Follow-up Questions</CardTitle>
+          </CardHeader>
+          <CardContent>
             <ul className="space-y-2">
               {question.followUpQuestions.map((q, i) => (
-                <li key={i} className="p-3 rounded-lg bg-muted/50 border">
-                  <span className="font-medium text-sm text-primary mr-2">
-                    Q{i + 1}:
-                  </span>
+                <li key={i} className="text-sm p-3 rounded-md bg-muted/50">
+                  <span className="font-medium text-muted-foreground mr-2">Q{i + 1}:</span>
                   {q}
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Related Topics */}
-        {question.relatedTopics.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-4">Related Topics</h3>
+      {/* Related Topics */}
+      {question.relatedTopics.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Related Topics</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="flex flex-wrap gap-2">
               {question.relatedTopics.map((topic, i) => (
-                <span
-                  key={i}
-                  className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-sm"
-                >
+                <Badge key={i} variant="secondary">
                   {topic}
-                </span>
+                </Badge>
               ))}
             </div>
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Common At Companies */}
-        {question.commonAt && question.commonAt.length > 0 && (
-          <section className="mb-8">
-            <h3 className="text-lg font-semibold mb-4">Commonly Asked At</h3>
+      {/* Common At */}
+      {question.commonAt && question.commonAt.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Commonly Asked At</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="flex flex-wrap gap-2">
               {question.commonAt.map((company, i) => (
-                <span
-                  key={i}
-                  className="px-3 py-1 rounded-full border bg-card text-sm font-medium"
-                >
+                <Badge key={i} variant="outline">
                   {company}
-                </span>
+                </Badge>
               ))}
             </div>
-          </section>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-4 pt-6 border-t">
-          <Link
-            href={`/flashcards/${question.category}`}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Study This Topic
-          </Link>
-          <Link
-            href="/questions"
-            className="px-4 py-2 rounded-lg border hover:bg-accent transition-colors"
-          >
-            Back to Library
-          </Link>
-          <Link
-            href="/interview"
-            className="px-4 py-2 rounded-lg border hover:bg-accent transition-colors"
-          >
-            Practice in Interview Mode
-          </Link>
-        </div>
-      </main>
+      <Separator className="my-8" />
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-3">
+        <Button asChild>
+          <Link href={`/flashcards/${question.category}`}>Study This Topic</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/questions">Back to Library</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/interview">Practice Interview</Link>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -239,11 +199,11 @@ function formatSource(source: string): string {
 function getDifficultyColor(difficulty: string): string {
   switch (difficulty) {
     case "junior":
-      return "text-green-600 dark:text-green-400";
+      return "text-green-600 border-green-200";
     case "mid":
-      return "text-yellow-600 dark:text-yellow-400";
+      return "text-yellow-600 border-yellow-200";
     case "senior":
-      return "text-red-600 dark:text-red-400";
+      return "text-red-600 border-red-200";
     default:
       return "";
   }
@@ -259,18 +219,5 @@ function getEstimatedTime(difficulty: string): number {
       return 8;
     default:
       return 5;
-  }
-}
-
-function getSourceBadgeClass(source: string): string {
-  switch (source) {
-    case "seed":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-    case "ai-generated":
-      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-    case "user-created":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-    default:
-      return "bg-muted text-muted-foreground";
   }
 }

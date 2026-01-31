@@ -5,6 +5,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
+import { Separator } from "@/components/ui/separator";
+
+const navItems = [
+  { href: "/flashcards", label: "Flashcards" },
+  { href: "/interview", label: "Interview" },
+  { href: "/questions", label: "Questions" },
+];
 
 export function Navbar() {
   const pathname = usePathname();
@@ -15,45 +22,32 @@ export function Navbar() {
   };
 
   return (
-    <header className="border-b">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <Logo size={32} />
-          <span className="font-semibold text-xl">FrontMaster</span>
-        </Link>
-        <nav className="flex items-center gap-6">
-          <Link
-            href="/flashcards"
-            className={`transition-colors ${
-              isActive("/flashcards")
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Flashcards
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4">
+        <div className="flex h-14 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <Logo size={28} />
+            <span className="font-semibold text-lg">FrontMaster</span>
           </Link>
-          <Link
-            href="/interview"
-            className={`transition-colors ${
-              isActive("/interview")
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Interview
-          </Link>
-          <Link
-            href="/questions"
-            className={`transition-colors ${
-              isActive("/questions")
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Questions
-          </Link>
-        </nav>
+
+          <nav className="flex items-center gap-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+                  isActive(item.href)
+                    ? "bg-secondary text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </div>
+      <Separator />
     </header>
   );
 }

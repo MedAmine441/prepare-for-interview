@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
 import type { QuestionCategory } from "@/types";
 import { FlashcardArena } from "@/components/flashcard/FlashcardArena";
+import { Badge } from "@/components/ui/badge";
 
 interface CategoryPageProps {
   params: Promise<{
@@ -12,51 +14,45 @@ interface CategoryPageProps {
   }>;
 }
 
-export default async function CategoryFlashcardsPage({
-  params,
-}: CategoryPageProps) {
+export default async function CategoryFlashcardsPage({ params }: CategoryPageProps) {
   const { category } = await params;
 
-  // Validate category exists
   const categoryMeta = CATEGORY_METADATA[category as QuestionCategory];
   if (!categoryMeta) {
     notFound();
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Sub-header with breadcrumb and category info */}
+    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col">
+      {/* Header */}
       <div className="border-b bg-muted/30">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center gap-2 text-sm mb-2">
-            <Link
-              href="/flashcards"
-              className="text-muted-foreground hover:text-foreground"
-            >
+        <div className="container mx-auto px-4 py-4 max-w-4xl">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+            <Link href="/flashcards" className="hover:text-foreground transition-colors">
               Flashcards
             </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-medium">{categoryMeta.name}</span>
-          </div>
+            <ChevronRight className="w-4 h-4" />
+            <span className="text-foreground font-medium">{categoryMeta.name}</span>
+          </nav>
+
           <div className="flex items-center gap-3">
-            <div
-              className={`w-8 h-8 rounded-lg ${categoryMeta.color} flex items-center justify-center`}
-            >
-              <span className="text-white text-sm">
-                {getCategoryEmoji(category)}
-              </span>
+            <div className={`w-9 h-9 rounded-md ${categoryMeta.color} flex items-center justify-center text-white`}>
+              {getCategoryEmoji(category)}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {categoryMeta.description}
-            </p>
+            <div>
+              <h1 className="font-semibold">{categoryMeta.name}</h1>
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {categoryMeta.description}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Flashcard Arena */}
-      <main className="flex-1 container mx-auto px-4 py-8">
+      {/* Arena */}
+      <div className="flex-1 py-8">
         <FlashcardArena category={category as QuestionCategory} />
-      </main>
+      </div>
     </div>
   );
 }
@@ -76,7 +72,6 @@ function getCategoryEmoji(slug: string): string {
   return emojiMap[slug] || "📚";
 }
 
-// Generate static params for all categories
 export function generateStaticParams() {
   return Object.keys(CATEGORY_METADATA).map((category) => ({
     category,

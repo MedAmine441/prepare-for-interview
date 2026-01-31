@@ -847,6 +847,28 @@
       "createdAt": "2026-01-30T23:53:35.573Z",
       "updatedAt": "2026-01-30T23:53:35.573Z",
       "isArchived": false
+    },
+    {
+      "category": "system-design",
+      "difficulty": "mid",
+      "question": "testdsfsdfsdfsd",
+      "answer": "testdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsdtestdfsdfsdfsdfsdfsd",
+      "keyPoints": [
+        "dfsd",
+        "dfsdfs"
+      ],
+      "followUpQuestions": [
+        "sdfsdfs"
+      ],
+      "relatedTopics": [
+        "dfsdfsdf"
+      ],
+      "commonAt": [],
+      "source": "user-created",
+      "id": "1TtCRnwoV4p5fbf5eppb1",
+      "createdAt": "2026-01-31T00:51:37.440Z",
+      "updatedAt": "2026-01-31T00:51:37.440Z",
+      "isArchived": false
     }
   ],
   "progress": [

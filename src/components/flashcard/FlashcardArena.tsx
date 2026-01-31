@@ -2,24 +2,16 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import {
-  RotateCcw,
-  Eye,
-  EyeOff,
-  Loader2,
-  Sparkles,
-  BookOpen,
-} from "lucide-react";
-import type {
-  QuestionCategory,
-  Question,
-  SM2Quality,
-  Difficulty,
-} from "@/types";
+import { useState, useEffect } from "react";
+import { RotateCcw, Loader2, Sparkles } from "lucide-react";
+import type { QuestionCategory, Question, SM2Quality, Difficulty } from "@/types";
 import { QUALITY_BUTTONS } from "@/types";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
 import { getNextStudyCard, answerFlashcard } from "@/actions/flashcard.actions";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 interface FlashcardArenaProps {
   category?: QuestionCategory;
@@ -38,9 +30,6 @@ export function FlashcardArena({ category, difficulty }: FlashcardArenaProps) {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [cardCount, setCardCount] = useState(0);
   const [startTime, setStartTime] = useState<number>(Date.now());
-
-  // Ref to help smooth height transitions if needed
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadNextCard();
@@ -120,145 +109,134 @@ export function FlashcardArena({ category, difficulty }: FlashcardArenaProps) {
     loadNextCard();
   };
 
-  // --- States for Loading/Error/Complete ---
-  if (isLoading && !currentCard)
+  // Loading state
+  if (isLoading && !currentCard) {
     return (
-      <div className="flex justify-center p-20">
-        <Loader2 className="animate-spin" />
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mb-3" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     );
-  if (error && !currentCard)
+  }
+
+  // Error state
+  if (error && !currentCard) {
     return (
-      <div className="text-center p-20 text-red-500">
-        {error}{" "}
-        <button onClick={loadNextCard} className="block mx-auto mt-4 underline">
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <Button variant="outline" onClick={loadNextCard}>
+          <RotateCcw className="w-4 h-4 mr-2" />
           Retry
-        </button>
+        </Button>
       </div>
     );
-  if (sessionComplete)
+  }
+
+  // Session complete
+  if (sessionComplete) {
     return (
-      <div className="text-center p-20">
-        <h2 className="text-xl font-bold mb-4">Session Complete! 🎉</h2>
-        <p className="text-muted-foreground mb-4">
+      <div className="flex flex-col items-center justify-center py-20 max-w-md mx-auto text-center">
+        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+          <span className="text-xl">🎉</span>
+        </div>
+        <h2 className="text-lg font-semibold mb-2">Session Complete</h2>
+        <p className="text-sm text-muted-foreground mb-6">
           {cardCount > 0
             ? `You studied ${cardCount} card${cardCount > 1 ? "s" : ""}.`
             : "No cards due for review."}
         </p>
-        <button
-          onClick={handleRestart}
-          className="bg-primary text-white px-4 py-2 rounded"
-        >
-          Study Again
-        </button>
+        <Button onClick={handleRestart}>Study Again</Button>
       </div>
     );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pb-20">
-      {/* Header Info */}
+    <div className="max-w-2xl mx-auto px-4">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="font-mono bg-muted px-2 py-1 rounded">
-            Card #{cardCount}
-          </span>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="font-mono text-xs">
+            #{cardCount}
+          </Badge>
           {currentCard?.isNew && (
-            <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-medium border border-green-100">
-              <Sparkles className="w-3 h-3" /> New
-            </span>
+            <Badge variant="secondary" className="text-xs">
+              <Sparkles className="w-3 h-3 mr-1" />
+              New
+            </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {isFlipped ? "Rate your recall" : "Tap card to flip"}
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {isFlipped ? "Rate your recall" : "Click to reveal"}
+        </p>
       </div>
 
-      {/* THE MAIN CARD CONTAINER */}
-      <div
-        className="flashcard-container relative w-full group cursor-pointer"
-        onClick={handleFlip}
-        ref={containerRef}
-      >
-        <div
-          className={`flashcard-inner duration-500 rounded-xl shadow-lg border bg-card ${
-            isFlipped ? "flipped" : ""
-          }`}
-        >
-          {/* --- FRONT (QUESTION) --- */}
-          <div
-            className={`flashcard-front p-8 md:p-12 flex flex-col justify-between
-            ${
-              isFlipped
-                ? "absolute inset-0 overflow-hidden"
-                : "relative min-h-[300px]"
+      {/* Card */}
+      <div className="flashcard-container cursor-pointer mb-6" onClick={handleFlip}>
+        <div className={`flashcard-inner ${isFlipped ? "flipped" : ""}`}>
+          {/* Front */}
+          <Card
+            className={`flashcard-front ${
+              isFlipped ? "absolute inset-0 overflow-hidden" : "relative min-h-[280px]"
             }`}
           >
-            <div className="flex items-center justify-between mb-8">
-              <span
-                className={`text-xs px-2.5 py-1 rounded-full uppercase tracking-wider font-semibold ${getDifficultyClass(
-                  currentCard?.question.difficulty,
-                )}`}
-              >
-                {currentCard?.question.difficulty}
-              </span>
-              <Eye className="w-5 h-5 text-muted-foreground opacity-20" />
-            </div>
+            <CardContent className="p-6 h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${getDifficultyColor(currentCard?.question.difficulty)}`}
+                >
+                  {currentCard?.question.difficulty}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {formatCategory(currentCard?.question.category || "")}
+                </Badge>
+              </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
-              <h2 className="text-2xl md:text-3xl font-medium leading-relaxed text-foreground text-balance">
-                {currentCard?.question.question}
-              </h2>
-            </div>
+              <div className="flex-1 flex items-center justify-center py-8">
+                <h2 className="text-xl font-medium text-center leading-relaxed">
+                  {currentCard?.question.question}
+                </h2>
+              </div>
 
-            <div className="mt-8 text-center">
-              <span className="text-xs font-medium text-muted-foreground/50 uppercase tracking-widest">
-                Click to Reveal
-              </span>
-            </div>
-          </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Click to reveal answer
+              </p>
+            </CardContent>
+          </Card>
 
-          {/* --- BACK (ANSWER) --- */}
-          <div
-            className={`flashcard-back flex flex-col bg-slate-50 dark:bg-slate-900/50 
-            ${
-              isFlipped
-                ? "relative min-h-[300px]"
-                : "absolute inset-0 overflow-hidden"
+          {/* Back */}
+          <Card
+            className={`flashcard-back ${
+              isFlipped ? "relative min-h-[280px]" : "absolute inset-0 overflow-hidden"
             }`}
           >
-            <div className="flex items-center justify-between p-6 border-b bg-card rounded-t-xl shrink-0">
-              <div className="flex items-center gap-2 text-primary font-medium">
-                <BookOpen className="w-4 h-4" />
-                <span>Answer</span>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-medium">Answer</span>
+                <Badge variant="secondary" className="text-xs">
+                  {formatCategory(currentCard?.question.category || "")}
+                </Badge>
               </div>
-              <EyeOff className="w-4 h-4 text-muted-foreground" />
-            </div>
-
-            {/* Content expands naturally */}
-            <div className="flex-1 p-8 md:p-10 text-left">
-              <div className="prose prose-slate dark:prose-invert max-w-none">
-                <MarkdownRenderer
-                  content={currentCard?.question.answer || ""}
-                />
+              <Separator className="mb-4" />
+              <div className="prose prose-sm max-w-none">
+                <MarkdownRenderer content={currentCard?.question.answer || ""} />
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
       {/* Rating Buttons */}
       <div
-        className={`mt-8 transition-all duration-500 transform ${
-          isFlipped
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 translate-y-4 pointer-events-none"
+        className={`transition-all duration-300 ${
+          isFlipped ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
         }`}
       >
         {!isSubmitting ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-2">
             <RatingButton
               label="Again"
-              sublabel="< 1m"
+              sublabel="<1m"
               onClick={() => handleRating(QUALITY_BUTTONS.AGAIN)}
               variant="again"
             />
@@ -282,8 +260,9 @@ export function FlashcardArena({ category, difficulty }: FlashcardArenaProps) {
             />
           </div>
         ) : (
-          <div className="flex justify-center p-4 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Saving...
+          <div className="flex items-center justify-center py-4 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            <span className="text-sm">Saving...</span>
           </div>
         )}
       </div>
@@ -298,18 +277,12 @@ interface RatingButtonProps {
   variant: "again" | "hard" | "good" | "easy";
 }
 
-function RatingButton({
-  label,
-  sublabel,
-  onClick,
-  variant,
-}: RatingButtonProps) {
+function RatingButton({ label, sublabel, onClick, variant }: RatingButtonProps) {
   const variantStyles = {
-    again:
-      "bg-rose-100 text-rose-700 hover:bg-rose-200 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800",
-    hard: "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800",
-    good: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-    easy: "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
+    again: "hover:bg-red-50 hover:border-red-200 hover:text-red-700",
+    hard: "hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700",
+    good: "hover:bg-green-50 hover:border-green-200 hover:text-green-700",
+    easy: "hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700",
   };
 
   return (
@@ -318,25 +291,30 @@ function RatingButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex flex-col items-center justify-center py-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm ${variantStyles[variant]}`}
+      className={`flex flex-col items-center justify-center py-3 rounded-md border bg-card transition-colors ${variantStyles[variant]}`}
     >
-      <span className="font-bold text-lg">{label}</span>
-      <span className="text-xs opacity-70 font-medium uppercase tracking-wide">
-        {sublabel}
-      </span>
+      <span className="font-medium text-sm">{label}</span>
+      <span className="text-xs text-muted-foreground">{sublabel}</span>
     </button>
   );
 }
 
-function getDifficultyClass(difficulty?: string): string {
+function formatCategory(category: string): string {
+  return category
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getDifficultyColor(difficulty?: string): string {
   switch (difficulty) {
     case "junior":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      return "text-green-600 border-green-200";
     case "mid":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      return "text-yellow-600 border-yellow-200";
     case "senior":
-      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      return "text-red-600 border-red-200";
     default:
-      return "bg-muted text-muted-foreground";
+      return "";
   }
 }

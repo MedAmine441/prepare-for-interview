@@ -8,13 +8,10 @@ import { Navbar } from "@/components/shared/Navbar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FrontMaster - Frontend Interview Prep",
-  description:
-    "Master frontend interviews with spaced repetition flashcards and AI-powered mock interviews",
+  title: "FrontMaster",
+  description: "Master frontend interviews with spaced repetition",
   icons: {
     icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
   },
 };
 
@@ -25,14 +22,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-      </head>
       <body className={inter.className}>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen flex flex-col">
           <Navbar />
-          {children}
+          <main className="flex-1">{children}</main>
         </div>
       </body>
     </html>

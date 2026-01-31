@@ -1,29 +1,13 @@
 // src/app/flashcards/page.tsx
 
-import Link from 'next/link';
-import { Suspense } from 'react';
-import { ArrowRight, Clock, TrendingUp } from 'lucide-react';
-import { CATEGORY_METADATA } from '@/lib/constants/categories';
+import Link from "next/link";
+import { Suspense } from "react";
+import { ArrowRight, Clock, TrendingUp, Plus } from "lucide-react";
+import { CATEGORY_METADATA } from "@/lib/constants/categories";
 
 export default function FlashcardsPage() {
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">F</span>
-              </div>
-              <span className="font-semibold text-xl">FrontMaster</span>
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-medium">Flashcards</span>
-          </div>
-        </div>
-      </header>
-
       <main className="container mx-auto px-4 py-8">
         {/* Study Actions */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
@@ -37,7 +21,13 @@ export default function FlashcardsPage() {
                 <p className="text-muted-foreground mb-4">
                   Review cards that are due for spaced repetition
                 </p>
-                <Suspense fallback={<div className="text-sm text-muted-foreground">Loading...</div>}>
+                <Suspense
+                  fallback={
+                    <div className="text-sm text-muted-foreground">
+                      Loading...
+                    </div>
+                  }
+                >
                   <DueCardsSummary />
                 </Suspense>
               </div>
@@ -53,14 +43,14 @@ export default function FlashcardsPage() {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-xl font-semibold mb-2">Learn New Cards</h2>
+                <h2 className="text-xl font-semibold mb-2">Add New Question</h2>
                 <p className="text-muted-foreground mb-4">
-                  Start studying questions you haven&apos;t seen yet
+                  Create a custom flashcard with your own question
                 </p>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1 text-green-600">
-                    <TrendingUp className="w-4 h-4" />
-                    New questions available
+                    <Plus className="w-4 h-4" />
+                    Create your own
                   </span>
                 </div>
               </div>
@@ -81,7 +71,9 @@ export default function FlashcardsPage() {
               className="group p-5 rounded-xl border bg-card hover:border-primary hover:shadow-md transition-all"
             >
               <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-lg ${category.color} flex items-center justify-center shrink-0`}>
+                <div
+                  className={`w-12 h-12 rounded-lg ${category.color} flex items-center justify-center shrink-0`}
+                >
                   <span className="text-white text-xl">
                     {getCategoryEmoji(category.slug)}
                   </span>
@@ -109,8 +101,7 @@ function DueCardsSummary() {
   return (
     <div className="flex items-center gap-4 text-sm">
       <span className="flex items-center gap-1 text-orange-600">
-        <Clock className="w-4 h-4" />
-        0 cards due
+        <Clock className="w-4 h-4" />0 cards due
       </span>
     </div>
   );
@@ -118,15 +109,15 @@ function DueCardsSummary() {
 
 function getCategoryEmoji(slug: string): string {
   const emojiMap: Record<string, string> = {
-    'system-design': '🏗️',
-    'caching-memoization': '💾',
-    'bundle-tree-shaking': '📦',
-    'security-auth': '🔒',
-    'feature-flags': '🚩',
-    'css-layout': '🎨',
-    'js-event-loop': '🔄',
-    'accessibility': '♿',
-    'react-internals': '⚛️',
+    "system-design": "🏗️",
+    "caching-memoization": "💾",
+    "bundle-tree-shaking": "📦",
+    "security-auth": "🔒",
+    "feature-flags": "🚩",
+    "css-layout": "🎨",
+    "js-event-loop": "🔄",
+    accessibility: "♿",
+    "react-internals": "⚛️",
   };
-  return emojiMap[slug] || '📚';
+  return emojiMap[slug] || "📚";
 }

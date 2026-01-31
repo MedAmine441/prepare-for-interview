@@ -16,6 +16,7 @@ import type {
   QuestionProgress,
   SM2Quality,
   QuestionCategory,
+  Difficulty,
   DueCards,
 } from "@/types";
 import { createQuestionId, SM2_QUALITY } from "@/types";
@@ -47,7 +48,10 @@ type ActionResult<T> =
  * Get the next card for study
  * Prioritizes: overdue > due today > new cards
  */
-export async function getNextStudyCard(category?: QuestionCategory): Promise<
+export async function getNextStudyCard(
+  category?: QuestionCategory,
+  difficulty?: Difficulty,
+): Promise<
   ActionResult<{
     question: Question;
     progress: QuestionProgress;
@@ -56,9 +60,10 @@ export async function getNextStudyCard(category?: QuestionCategory): Promise<
   } | null>
 > {
   try {
-    // Get all questions for the category
+    // Get all questions for the category and difficulty
     const questions = await questionRepository.findAll({
       categories: category ? [category] : undefined,
+      difficulties: difficulty ? [difficulty] : undefined,
     });
 
     if (questions.length === 0) {
@@ -69,12 +74,12 @@ export async function getNextStudyCard(category?: QuestionCategory): Promise<
     const dueCards = await progressRepository.getDueCards();
     const questionIds = new Set(questions.map((q) => q.id));
 
-    // Filter due cards to only include questions from our category
+    // Filter due cards to only include questions from our filters
     const overdueInCategory = dueCards.overdue.filter((id) =>
-      questionIds.has(id)
+      questionIds.has(id),
     );
     const dueTodayInCategory = dueCards.dueToday.filter((id) =>
-      questionIds.has(id)
+      questionIds.has(id),
     );
 
     // Find new cards (questions without progress)
@@ -178,7 +183,8 @@ export async function answerFlashcard(formData: FormData): Promise<
  * Get study session statistics
  */
 export async function getStudySessionStats(
-  category?: QuestionCategory
+  category?: QuestionCategory,
+  difficulty?: Difficulty,
 ): Promise<
   ActionResult<{
     dueCards: DueCards;
@@ -191,12 +197,13 @@ export async function getStudySessionStats(
   try {
     const questions = await questionRepository.findAll({
       categories: category ? [category] : undefined,
+      difficulties: difficulty ? [difficulty] : undefined,
     });
 
     const dueCards = await progressRepository.getDueCards();
     const questionIds = new Set(questions.map((q) => q.id));
 
-    // Filter to category
+    // Filter to category/difficulty
     const filteredDue: DueCards = {
       overdue: dueCards.overdue.filter((id) => questionIds.has(id)),
       dueToday: dueCards.dueToday.filter((id) => questionIds.has(id)),
@@ -211,7 +218,7 @@ export async function getStudySessionStats(
       ...filteredDue.upcoming,
     ]);
     const newCardsCount = questions.filter(
-      (q) => !allProgressIds.has(q.id)
+      (q) => !allProgressIds.has(q.id),
     ).length;
 
     return {
@@ -235,11 +242,11 @@ export async function getStudySessionStats(
  * Reset progress for a specific question
  */
 export async function resetQuestionProgress(
-  questionId: string
+  questionId: string,
 ): Promise<ActionResult<void>> {
   try {
     const success = await progressRepository.reset(
-      createQuestionId(questionId)
+      createQuestionId(questionId),
     );
 
     if (!success) {
@@ -284,7 +291,7 @@ export async function getProgressDashboard(): Promise<
         total,
         studied: 0, // Will be calculated from progress
         due: 0,
-      })
+      }),
     );
 
     return {

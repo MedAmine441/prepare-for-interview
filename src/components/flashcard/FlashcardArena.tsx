@@ -11,16 +11,22 @@ import {
   Sparkles,
   BookOpen,
 } from "lucide-react";
-import type { QuestionCategory, Question, SM2Quality } from "@/types";
+import type {
+  QuestionCategory,
+  Question,
+  SM2Quality,
+  Difficulty,
+} from "@/types";
 import { QUALITY_BUTTONS } from "@/types";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
 import { getNextStudyCard, answerFlashcard } from "@/actions/flashcard.actions";
 
 interface FlashcardArenaProps {
-  category: QuestionCategory;
+  category?: QuestionCategory;
+  difficulty?: Difficulty;
 }
 
-export function FlashcardArena({ category }: FlashcardArenaProps) {
+export function FlashcardArena({ category, difficulty }: FlashcardArenaProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [currentCard, setCurrentCard] = useState<{
     question: Question;
@@ -38,7 +44,7 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
 
   useEffect(() => {
     loadNextCard();
-  }, [category]);
+  }, [category, difficulty]);
 
   const loadNextCard = async () => {
     setIsLoading(true);
@@ -46,7 +52,7 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
     setIsFlipped(false);
 
     try {
-      const result = await getNextStudyCard(category);
+      const result = await getNextStudyCard(category, difficulty);
 
       if (!result.success) {
         setError(result.error);
@@ -114,7 +120,7 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
     loadNextCard();
   };
 
-  // --- States for Loading/Error/Complete (Keep your existing ones) ---
+  // --- States for Loading/Error/Complete ---
   if (isLoading && !currentCard)
     return (
       <div className="flex justify-center p-20">
@@ -134,6 +140,11 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
     return (
       <div className="text-center p-20">
         <h2 className="text-xl font-bold mb-4">Session Complete! 🎉</h2>
+        <p className="text-muted-foreground mb-4">
+          {cardCount > 0
+            ? `You studied ${cardCount} card${cardCount > 1 ? "s" : ""}.`
+            : "No cards due for review."}
+        </p>
         <button
           onClick={handleRestart}
           className="bg-primary text-white px-4 py-2 rounded"
@@ -162,9 +173,7 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
         </div>
       </div>
 
-      {/* THE MAIN CARD CONTAINER 
-         We toggle classes to control layout flow.
-      */}
+      {/* THE MAIN CARD CONTAINER */}
       <div
         className="flashcard-container relative w-full group cursor-pointer"
         onClick={handleFlip}
@@ -176,8 +185,6 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
           }`}
         >
           {/* --- FRONT (QUESTION) --- */}
-          {/* If flipped, we make this absolute so it doesn't push the height. 
-              If NOT flipped, it is relative so it DEFINES the height. */}
           <div
             className={`flashcard-front p-8 md:p-12 flex flex-col justify-between
             ${
@@ -189,7 +196,7 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
             <div className="flex items-center justify-between mb-8">
               <span
                 className={`text-xs px-2.5 py-1 rounded-full uppercase tracking-wider font-semibold ${getDifficultyClass(
-                  currentCard?.question.difficulty
+                  currentCard?.question.difficulty,
                 )}`}
               >
                 {currentCard?.question.difficulty}
@@ -211,7 +218,6 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
           </div>
 
           {/* --- BACK (ANSWER) --- */}
-          {/* Opposite logic: Relative when flipped (so it grows), Absolute when hidden. */}
           <div
             className={`flashcard-back flex flex-col bg-slate-50 dark:bg-slate-900/50 
             ${
@@ -285,7 +291,6 @@ export function FlashcardArena({ category }: FlashcardArenaProps) {
   );
 }
 
-// ... RatingButton and helper functions (Keep existing) ...
 interface RatingButtonProps {
   label: string;
   sublabel: string;

@@ -1,50 +1,18 @@
 // src/app/page.tsx
 
-import Link from 'next/link';
-import { 
-  BookOpen, 
-  MessageSquare, 
-  Library, 
+import Link from "next/link";
+import {
+  BookOpen,
+  MessageSquare,
+  Library,
   TrendingUp,
   Clock,
-  Target
-} from 'lucide-react';
+  Target,
+} from "lucide-react";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">F</span>
-            </div>
-            <span className="font-semibold text-xl">FrontMaster</span>
-          </div>
-          <nav className="flex items-center gap-6">
-            <Link 
-              href="/flashcards" 
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Flashcards
-            </Link>
-            <Link 
-              href="/interview" 
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Interview
-            </Link>
-            <Link 
-              href="/questions" 
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Questions
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-6 text-balance">
@@ -52,7 +20,7 @@ export default function HomePage() {
           <span className="text-primary"> Spaced Repetition</span>
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-          Practice real interview questions, study with scientifically-proven 
+          Practice real interview questions, study with scientifically-proven
           flashcards, and simulate mock interviews with AI.
         </p>
         <div className="flex gap-4 justify-center">
@@ -133,11 +101,15 @@ export default function HomePage() {
               href={`/flashcards/${category.slug}`}
               className="p-4 rounded-lg border hover:border-primary hover:shadow-sm transition-all"
             >
-              <div className={`w-10 h-10 rounded-lg ${category.color} flex items-center justify-center mb-3`}>
+              <div
+                className={`w-10 h-10 rounded-lg ${category.color} flex items-center justify-center mb-3`}
+              >
                 <span className="text-white text-lg">{category.icon}</span>
               </div>
               <h3 className="font-medium">{category.name}</h3>
-              <p className="text-sm text-muted-foreground">{category.count} questions</p>
+              <p className="text-sm text-muted-foreground">
+                {category.count} questions
+              </p>
             </Link>
           ))}
         </div>
@@ -153,13 +125,13 @@ export default function HomePage() {
   );
 }
 
-function FeatureCard({ 
-  icon, 
-  title, 
-  description 
-}: { 
-  icon: React.ReactNode; 
-  title: string; 
+function FeatureCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
   description: string;
 }) {
   return (
@@ -173,13 +145,13 @@ function FeatureCard({
   );
 }
 
-function StatCard({ 
-  icon, 
-  value, 
-  label 
-}: { 
-  icon: React.ReactNode; 
-  value: string; 
+function StatCard({
+  icon,
+  value,
+  label,
+}: {
+  icon: React.ReactNode;
+  value: string;
   label: string;
 }) {
   return (
@@ -194,13 +166,67 @@ function StatCard({
 }
 
 const categories = [
-  { slug: 'react-internals', name: 'React Internals', icon: '⚛️', color: 'bg-cyan-500', count: 18 },
-  { slug: 'system-design', name: 'System Design', icon: '🏗️', color: 'bg-blue-500', count: 20 },
-  { slug: 'js-event-loop', name: 'Event Loop', icon: '🔄', color: 'bg-orange-500', count: 12 },
-  { slug: 'css-layout', name: 'CSS & Layout', icon: '🎨', color: 'bg-pink-500', count: 15 },
-  { slug: 'caching-memoization', name: 'Caching', icon: '💾', color: 'bg-green-500', count: 12 },
-  { slug: 'security-auth', name: 'Security', icon: '🔒', color: 'bg-red-500', count: 10 },
-  { slug: 'accessibility', name: 'Accessibility', icon: '♿', color: 'bg-teal-500', count: 12 },
-  { slug: 'bundle-tree-shaking', name: 'Bundling', icon: '📦', color: 'bg-yellow-500', count: 10 },
-  { slug: 'feature-flags', name: 'Feature Flags', icon: '🚩', color: 'bg-purple-500', count: 8 },
+  {
+    slug: "react-internals",
+    name: "React Internals",
+    icon: "⚛️",
+    color: "bg-cyan-500",
+    count: 18,
+  },
+  {
+    slug: "system-design",
+    name: "System Design",
+    icon: "🏗️",
+    color: "bg-blue-500",
+    count: 20,
+  },
+  {
+    slug: "js-event-loop",
+    name: "Event Loop",
+    icon: "🔄",
+    color: "bg-orange-500",
+    count: 12,
+  },
+  {
+    slug: "css-layout",
+    name: "CSS & Layout",
+    icon: "🎨",
+    color: "bg-pink-500",
+    count: 15,
+  },
+  {
+    slug: "caching-memoization",
+    name: "Caching",
+    icon: "💾",
+    color: "bg-green-500",
+    count: 12,
+  },
+  {
+    slug: "security-auth",
+    name: "Security",
+    icon: "🔒",
+    color: "bg-red-500",
+    count: 10,
+  },
+  {
+    slug: "accessibility",
+    name: "Accessibility",
+    icon: "♿",
+    color: "bg-teal-500",
+    count: 12,
+  },
+  {
+    slug: "bundle-tree-shaking",
+    name: "Bundling",
+    icon: "📦",
+    color: "bg-yellow-500",
+    count: 10,
+  },
+  {
+    slug: "feature-flags",
+    name: "Feature Flags",
+    icon: "🚩",
+    color: "bg-purple-500",
+    count: 8,
+  },
 ];

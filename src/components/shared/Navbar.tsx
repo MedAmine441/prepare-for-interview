@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 import { Separator } from "@/components/ui/separator";
 
 const navItems = [
@@ -44,6 +45,7 @@ export function Navbar() {
                 {item.label}
               </Link>
             ))}
+            <ThemeToggle />
           </nav>
         </div>
       </div>

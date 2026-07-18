@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, Clock, ArrowLeft } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Clock, ArrowLeft } from "lucide-react";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
 import { getQuestionById } from "@/actions/question.actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  formatCategory,
+  formatSource,
+  getDifficultyColor,
+  getEstimatedTime,
+} from "@/lib/utils/question-format";
 
 interface QuestionPageProps {
   params: Promise<{
@@ -76,38 +82,42 @@ export default async function QuestionDetailPage({ params }: QuestionPageProps) 
         </div>
       </div>
 
-      {/* Answer */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base">Model Answer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-sm max-w-none">
-            <MarkdownRenderer content={question.answer} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Key Points */}
+      {/* Quick Answer — the concise, studyable version */}
       {question.keyPoints.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-base">Key Points</CardTitle>
+            <CardTitle className="text-base">Quick Answer</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {question.keyPoints.map((point, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-secondary text-foreground flex items-center justify-center text-xs font-medium shrink-0">
-                    {i + 1}
-                  </span>
-                  <span className="text-sm">{point}</span>
+                <li key={i} className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <span className="text-sm leading-relaxed">{point}</span>
                 </li>
               ))}
             </ul>
           </CardContent>
         </Card>
       )}
+
+      {/* Full answer, collapsed by default so the page stays scannable */}
+      <Card className="mb-6">
+        <details className="group">
+          <summary className="flex items-center justify-between cursor-pointer list-none p-6 [&::-webkit-details-marker]:hidden">
+            <span className="text-base font-semibold leading-none tracking-tight">
+              Deep Dive
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Full model answer
+              <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+            </span>
+          </summary>
+          <CardContent className="pt-0">
+            <MarkdownRenderer content={question.answer} />
+          </CardContent>
+        </details>
+      </Card>
 
       {/* Follow-up Questions */}
       {question.followUpQuestions.length > 0 && (
@@ -180,44 +190,4 @@ export default async function QuestionDetailPage({ params }: QuestionPageProps) 
       </div>
     </div>
   );
-}
-
-function formatCategory(category: string): string {
-  return category
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function formatSource(source: string): string {
-  return source
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getDifficultyColor(difficulty: string): string {
-  switch (difficulty) {
-    case "junior":
-      return "text-green-600 border-green-200";
-    case "mid":
-      return "text-yellow-600 border-yellow-200";
-    case "senior":
-      return "text-red-600 border-red-200";
-    default:
-      return "";
-  }
-}
-
-function getEstimatedTime(difficulty: string): number {
-  switch (difficulty) {
-    case "junior":
-      return 3;
-    case "mid":
-      return 5;
-    case "senior":
-      return 8;
-    default:
-      return 5;
-  }
 }

@@ -19,10 +19,10 @@ import {
  * Default Kimi configuration
  */
 const DEFAULT_CONFIG: Partial<KimiConfig> = {
-  baseUrl: 'https://api.moonshot.cn/v1',
-  model: 'moonshot-v1-128k',
-  defaultTemperature: 0.7,
-  defaultMaxTokens: 2048,
+  baseUrl: 'https://api.moonshot.ai/v1',
+  model: 'kimi-k2.6',
+  defaultTemperature: 1,
+  defaultMaxTokens: 4096,
 };
 
 /**

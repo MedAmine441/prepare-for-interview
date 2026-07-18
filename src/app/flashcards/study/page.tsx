@@ -2,21 +2,37 @@
 
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
-import { FlashcardArena } from "@/components/flashcard/FlashcardArena";
+import { ChevronRight, Loader2 } from "lucide-react";
+import { FlashcardArena, type StudyMode } from "@/components/flashcard/FlashcardArena";
+import { StudyModeToggle } from "@/components/flashcard/StudyModeToggle";
 import { CategoryFilter } from "@/components/shared/CategoryFilter";
 import { DifficultyFilter } from "@/components/shared/DifficultyFilter";
-import { Separator } from "@/components/ui/separator";
 import type { QuestionCategory, Difficulty } from "@/types";
 
 export default function StudyDueCardsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <StudyPageContent />
+    </Suspense>
+  );
+}
+
+function StudyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const category = (searchParams.get("category") || "all") as QuestionCategory | "all";
   const difficulty = (searchParams.get("difficulty") || "all") as Difficulty | "all";
+  const mode: StudyMode = searchParams.get("mode") === "practice" ? "practice" : "review";
 
   const updateParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -42,7 +58,7 @@ export default function StudyDueCardsPage() {
           </nav>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-muted-foreground">Filter:</span>
+            <StudyModeToggle />
             <CategoryFilter
               value={category}
               onChange={(val) => updateParams("category", val)}
@@ -60,6 +76,7 @@ export default function StudyDueCardsPage() {
         <FlashcardArena
           category={category === "all" ? undefined : category}
           difficulty={difficulty === "all" ? undefined : difficulty}
+          mode={mode}
         />
       </div>
     </div>

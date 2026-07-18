@@ -75,8 +75,9 @@ export function calculateSM2(
     newRepetitions = currentState.repetitions + 1;
 
     if (newRepetitions === 1) {
-      // First correct response
-      newInterval = 1;
+      // First correct response — perfect recall graduates straight to 4 days
+      // (Anki-style easy bonus), otherwise review again tomorrow
+      newInterval = quality === 5 ? 4 : 1;
     } else if (newRepetitions === 2) {
       // Second correct response
       newInterval = 6;

@@ -203,8 +203,8 @@ export async function updateQuestion(
     
     // Update question
     const question = await questionRepository.update({
-      id: createQuestionId(input.id),
       ...input,
+      id: createQuestionId(input.id),
     });
     
     if (!question) {

@@ -239,6 +239,95 @@ export async function getStudySessionStats(
 }
 
 /**
+ * Overview of study state across all categories, computed in one pass.
+ * Used by the home page and flashcards hub instead of hardcoded values.
+ */
+export interface FlashcardsOverview {
+  totalQuestions: number;
+  totalStudied: number;
+  totalMastered: number;
+  /** Cards scheduled for review that are due now (overdue + due today) */
+  dueCount: number;
+  /** Cards never successfully reviewed yet */
+  newCount: number;
+  streakDays: number;
+  lastStudyDate: string | null;
+  categories: Array<{
+    slug: QuestionCategory;
+    total: number;
+    studied: number;
+    due: number;
+    mastered: number;
+  }>;
+}
+
+export async function getFlashcardsOverview(): Promise<
+  ActionResult<FlashcardsOverview>
+> {
+  try {
+    const questions = await questionRepository.findAll();
+    const dueCards = await progressRepository.getDueCards();
+    const dashboard = await progressRepository.getDashboard();
+
+    const dueIds = new Set([...dueCards.overdue, ...dueCards.dueToday]);
+    const scheduledIds = new Set([
+      ...dueCards.overdue,
+      ...dueCards.dueToday,
+      ...dueCards.upcoming,
+    ]);
+
+    const byCategory = new Map<
+      QuestionCategory,
+      { total: number; studied: number; due: number; mastered: number }
+    >();
+
+    const progress = await progressRepository.findAll();
+    const masteredIds = new Set(
+      progress
+        .filter((p) => p.sm2.repetitions > 0 && p.sm2.interval >= 30)
+        .map((p) => p.questionId),
+    );
+
+    let newCount = 0;
+    for (const q of questions) {
+      const entry = byCategory.get(q.category) ?? {
+        total: 0,
+        studied: 0,
+        due: 0,
+        mastered: 0,
+      };
+      entry.total++;
+      if (scheduledIds.has(q.id)) entry.studied++;
+      else newCount++;
+      if (dueIds.has(q.id)) entry.due++;
+      if (masteredIds.has(q.id)) entry.mastered++;
+      byCategory.set(q.category, entry);
+    }
+
+    return {
+      success: true,
+      data: {
+        totalQuestions: questions.length,
+        // Count actual reviews, not progress shells created by merely viewing a card
+        totalStudied: progress.filter((p) => p.totalReviews > 0).length,
+        totalMastered: dashboard.totalMastered,
+        dueCount: dueIds.size,
+        newCount,
+        streakDays: dashboard.streakDays,
+        lastStudyDate: dashboard.lastStudyDate,
+        categories: Array.from(byCategory.entries()).map(([slug, s]) => ({
+          slug,
+          ...s,
+        })),
+      },
+    };
+  } catch (error) {
+    console.error("Error getting flashcards overview:", error);
+    return { success: false, error: "Failed to get overview" };
+  }
+}
+
+/**
  * Reset progress for a specific question
  */
 export async function resetQuestionProgress(

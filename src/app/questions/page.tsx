@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, Clock, Loader2, Plus } from "lucide-react";
@@ -13,10 +13,28 @@ import { getQuestions } from "@/actions/question.actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import {
+  formatCategory,
+  getDifficultyColor,
+  getEstimatedTime,
+} from "@/lib/utils/question-format";
 import type { Question, QuestionCategory, Difficulty } from "@/types";
 
 export default function QuestionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <QuestionsPageContent />
+    </Suspense>
+  );
+}
+
+function QuestionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -222,37 +240,4 @@ function QuestionRow({ question }: { question: Question }) {
       </Card>
     </Link>
   );
-}
-
-function formatCategory(category: string): string {
-  return category
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getDifficultyColor(difficulty: string): string {
-  switch (difficulty) {
-    case "junior":
-      return "text-green-600 border-green-200";
-    case "mid":
-      return "text-yellow-600 border-yellow-200";
-    case "senior":
-      return "text-red-600 border-red-200";
-    default:
-      return "";
-  }
-}
-
-function getEstimatedTime(difficulty: string): number {
-  switch (difficulty) {
-    case "junior":
-      return 3;
-    case "mid":
-      return 5;
-    case "senior":
-      return 8;
-    default:
-      return 5;
-  }
 }

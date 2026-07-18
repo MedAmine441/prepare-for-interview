@@ -3,8 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const KIMI_API_KEY = process.env.KIMI_API_KEY;
-const KIMI_BASE_URL = process.env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1';
-const KIMI_MODEL = process.env.KIMI_MODEL || 'moonshot-v1-8k';
+const KIMI_BASE_URL = process.env.KIMI_BASE_URL || 'https://api.moonshot.ai/v1';
+const KIMI_MODEL = process.env.KIMI_MODEL || 'kimi-k2.6';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,8 +27,10 @@ export async function POST(request: NextRequest) {
         model: KIMI_MODEL,
         messages,
         stream,
-        temperature: 0.7,
-        max_tokens: 2048,
+        // No temperature override — kimi-k2.6 only accepts its default (1)
+        // Reasoning models spend part of the budget thinking before answering,
+        // so leave generous headroom for the visible reply
+        max_tokens: 4096,
       }),
     });
 
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (stream) {
-      // Return streaming response
+      // Re-emit upstream SSE as simplified {content} frames
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
 
@@ -54,38 +56,46 @@ export async function POST(request: NextRequest) {
             return;
           }
 
+          let buffer = '';
           try {
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
 
-              const chunk = decoder.decode(value);
-              const lines = chunk.split('\n').filter(line => line.trim() !== '');
+              // Buffer across reads — SSE frames can arrive split mid-line
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
 
               for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6);
-                  if (data === '[DONE]') {
-                    controller.close();
-                    return;
-                  }
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data: ')) continue;
 
-                  try {
-                    const parsed = JSON.parse(data);
-                    const content = parsed.choices?.[0]?.delta?.content;
-                    if (content) {
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
-                    }
-                  } catch {
-                    // Ignore parse errors for incomplete chunks
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') {
+                  controller.close();
+                  return;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
                   }
+                } catch {
+                  // Ignore malformed frames
                 }
               }
             }
           } catch (error) {
             console.error('Stream error:', error);
           } finally {
-            controller.close();
+            try {
+              controller.close();
+            } catch {
+              // Already closed
+            }
           }
         },
       });

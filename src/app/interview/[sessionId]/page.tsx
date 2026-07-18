@@ -4,16 +4,68 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { InterviewChat } from "@/components/interview/InterviewChat";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { questionRepository } from "@/lib/db/repositories";
+import { formatCategory } from "@/lib/utils/question-format";
+import type { QuestionCategory, Difficulty } from "@/types";
 
 interface SessionPageProps {
   params: Promise<{
     sessionId: string;
   }>;
+  searchParams: Promise<{
+    categories?: string;
+    difficulty?: string;
+    mode?: string;
+    maxQuestions?: string;
+  }>;
 }
 
-export default async function InterviewSessionPage({ params }: SessionPageProps) {
+export default async function InterviewSessionPage({ params, searchParams }: SessionPageProps) {
   const { sessionId } = await params;
+  const sp = await searchParams;
+
+  const categories = (sp.categories?.split(",").filter(Boolean) ?? []) as QuestionCategory[];
+  const difficulty = (sp.difficulty || "mid") as Difficulty;
+  const mode = sp.mode || "mixed";
+  const maxQuestions = Math.min(Math.max(parseInt(sp.maxQuestions || "5", 10) || 5, 1), 10);
+
+  // Pull real questions from the bank matching the chosen filters
+  const bankQuestions =
+    mode === "ai-generated"
+      ? []
+      : shuffle(
+          await questionRepository.findAll({
+            categories: categories.length > 0 ? categories : undefined,
+            difficulties: [difficulty],
+          }),
+        ).slice(0, maxQuestions);
+
+  const topicLabel =
+    categories.length > 0
+      ? categories.map(formatCategory).join(", ")
+      : "any frontend topic";
+
+  const systemPrompt = buildInterviewerPrompt({
+    topicLabel,
+    difficulty,
+    mode,
+    maxQuestions,
+    bankQuestions: bankQuestions.map((q) => ({
+      question: q.question,
+      keyPoints: q.keyPoints,
+    })),
+  });
+
+  // With bank questions we can open deterministically (no API round-trip);
+  // otherwise the client asks the model to open the interview.
+  const openingMessage =
+    bankQuestions.length > 0
+      ? `Hi! I'll be your interviewer today — ${bankQuestions.length} question${
+          bankQuestions.length > 1 ? "s" : ""
+        } on **${topicLabel}** at ${difficulty} level. Answer as you would out loud in a real interview.\n\n**Question 1:** ${bankQuestions[0].question}`
+      : null;
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
@@ -30,17 +82,77 @@ export default async function InterviewSessionPage({ params }: SessionPageProps)
             <Separator orientation="vertical" className="h-5" />
             <span className="text-sm font-medium">Mock Interview</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span>Connected</span>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs capitalize">
+              {difficulty}
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              {bankQuestions.length > 0
+                ? `${bankQuestions.length} questions`
+                : `${maxQuestions} AI questions`}
+            </Badge>
           </div>
         </div>
       </div>
 
       {/* Chat */}
       <div className="flex-1 overflow-hidden">
-        <InterviewChat sessionId={sessionId} />
+        <InterviewChat
+          sessionId={sessionId}
+          systemPrompt={systemPrompt}
+          openingMessage={openingMessage}
+        />
       </div>
     </div>
   );
+}
+
+function buildInterviewerPrompt(config: {
+  topicLabel: string;
+  difficulty: string;
+  mode: string;
+  maxQuestions: number;
+  bankQuestions: Array<{ question: string; keyPoints: string[] }>;
+}): string {
+  const { topicLabel, difficulty, mode, maxQuestions, bankQuestions } = config;
+
+  let prompt = `You are an experienced senior frontend engineer conducting a realistic mock technical interview.
+
+Interview configuration:
+- Topics: ${topicLabel}
+- Target difficulty: ${difficulty}
+- Planned questions: ${bankQuestions.length > 0 ? bankQuestions.length : maxQuestions}
+`;
+
+  if (bankQuestions.length > 0) {
+    prompt += `\nWork through these questions in order, one at a time:\n`;
+    bankQuestions.forEach((q, i) => {
+      prompt += `${i + 1}. ${q.question}\n   Key points a strong answer covers: ${q.keyPoints.join("; ")}\n`;
+    });
+    if (mode === "mixed") {
+      prompt += `\nYou may occasionally swap in or add one invented question if the conversation naturally leads there, but stay within the planned total.\n`;
+    }
+  } else {
+    prompt += `\nInvent ${maxQuestions} realistic, specific interview questions on the topics above at the target difficulty. Ask them one at a time.\n`;
+  }
+
+  prompt += `
+Rules:
+- Ask exactly ONE question at a time, then wait for the candidate's answer.
+- After each answer: give brief feedback (2-3 sentences — what was good, what was missed, using the key points as your rubric), then either ask ONE short follow-up or move on to the next question. At most one follow-up per question.
+- Keep every message under 150 words. This is recall practice, not a lecture.
+- Never answer a question for the candidate unless they explicitly give up on it.
+- If an answer is vague, ask them to be specific rather than filling gaps yourself.
+- After the final question — or if the candidate asks to stop — give an overall debrief: strengths, the top 3 gaps, and the specific topics they should study next.`;
+
+  return prompt;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }

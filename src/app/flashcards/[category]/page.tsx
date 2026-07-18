@@ -1,12 +1,13 @@
 // src/app/flashcards/[category]/page.tsx
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
 import type { QuestionCategory } from "@/types";
-import { FlashcardArena } from "@/components/flashcard/FlashcardArena";
-import { Badge } from "@/components/ui/badge";
+import { CategoryArena } from "@/components/flashcard/CategoryArena";
+import { getCategoryEmoji } from "@/lib/utils/question-format";
 
 interface CategoryPageProps {
   params: Promise<{
@@ -51,25 +52,18 @@ export default async function CategoryFlashcardsPage({ params }: CategoryPagePro
 
       {/* Arena */}
       <div className="flex-1 py-8">
-        <FlashcardArena category={category as QuestionCategory} />
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <CategoryArena category={category as QuestionCategory} />
+        </Suspense>
       </div>
     </div>
   );
-}
-
-function getCategoryEmoji(slug: string): string {
-  const emojiMap: Record<string, string> = {
-    "system-design": "🏗️",
-    "caching-memoization": "💾",
-    "bundle-tree-shaking": "📦",
-    "security-auth": "🔒",
-    "feature-flags": "🚩",
-    "css-layout": "🎨",
-    "js-event-loop": "🔄",
-    accessibility: "♿",
-    "react-internals": "⚛️",
-  };
-  return emojiMap[slug] || "📚";
 }
 
 export function generateStaticParams() {

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Play, Check } from "lucide-react";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
+import { getCategoryEmoji } from "@/lib/utils/question-format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,9 @@ export default function InterviewSetupPage() {
       mode,
       maxQuestions: maxQuestions.toString(),
     });
-    router.push(`/interview/session?${params.toString()}`);
+    // Unique id so a fresh session remounts the chat cleanly
+    const sessionId = Date.now().toString(36);
+    router.push(`/interview/${sessionId}?${params.toString()}`);
   };
 
   return (
@@ -188,17 +191,3 @@ export default function InterviewSetupPage() {
   );
 }
 
-function getCategoryEmoji(slug: string): string {
-  const emojiMap: Record<string, string> = {
-    "system-design": "🏗️",
-    "caching-memoization": "💾",
-    "bundle-tree-shaking": "📦",
-    "security-auth": "🔒",
-    "feature-flags": "🚩",
-    "css-layout": "🎨",
-    "js-event-loop": "🔄",
-    accessibility: "♿",
-    "react-internals": "⚛️",
-  };
-  return emojiMap[slug] || "📚";
-}

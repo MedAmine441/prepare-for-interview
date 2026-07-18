@@ -2,9 +2,11 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { Send, Loader2, Flag } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
+import { Button } from '@/components/ui/button';
 
 interface Message {
   id: string;
@@ -15,32 +17,146 @@ interface Message {
 
 interface InterviewChatProps {
   sessionId: string;
+  /** Full interviewer system prompt, built server-side from the session config */
+  systemPrompt: string;
+  /**
+   * Deterministic opening message (greeting + first bank question).
+   * When null the model is asked to open the interview itself.
+   */
+  openingMessage: string | null;
 }
 
-export function InterviewChat({ sessionId }: InterviewChatProps) {
+const END_INTERVIEW_INSTRUCTION =
+  'I would like to end the interview here. Please give me the overall debrief now: my strengths, my top 3 gaps, and the specific topics I should study next.';
+
+export function InterviewChat({ sessionId, systemPrompt, openingMessage }: InterviewChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [hasEnded, setHasEnded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const bootstrappedRef = useRef(false);
 
-  // Add initial interviewer message
+  const sendToModel = useCallback(
+    async (history: Message[], userContent: string, options: { hidden?: boolean } = {}) => {
+      setIsLoading(true);
+      setStreamingContent('');
+
+      if (!options.hidden) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `u-${Date.now()}`,
+            role: 'user',
+            content: userContent,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...history.map((m) => ({ role: m.role, content: m.content })),
+              { role: 'user', content: userContent },
+            ],
+            stream: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get response');
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedContent = '';
+        let buffer = '';
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Buffer across reads — SSE frames can be split mid-line
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.content) {
+                  accumulatedContent += data.content;
+                  setStreamingContent(accumulatedContent);
+                }
+              } catch {
+                // Ignore malformed frames
+              }
+            }
+          }
+        }
+
+        if (accumulatedContent) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `a-${Date.now()}`,
+              role: 'assistant',
+              content: accumulatedContent,
+              timestamp: new Date(),
+            },
+          ]);
+        } else {
+          throw new Error('Empty response');
+        }
+        setStreamingContent('');
+      } catch (error) {
+        console.error('Chat error:', error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `e-${Date.now()}`,
+            role: 'assistant',
+            content:
+              'Sorry, I ran into an error talking to the AI. Check that your API key is configured, then send your answer again.',
+            timestamp: new Date(),
+          },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [systemPrompt],
+  );
+
+  // Open the interview: deterministic bank opening, or ask the model to start
   useEffect(() => {
-    const initialMessage: Message = {
-      id: 'initial',
-      role: 'assistant',
-      content: `Hello! I'm your technical interviewer today. I'll be asking you questions about frontend development.
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
 
-Let's start with a warm-up question:
-
-**What are the key differences between \`var\`, \`let\`, and \`const\` in JavaScript?**
-
-Take your time to think through your answer, and feel free to include code examples if it helps explain your points.`,
-      timestamp: new Date(),
-    };
-    setMessages([initialMessage]);
-  }, [sessionId]);
+    if (openingMessage) {
+      setMessages([
+        {
+          id: 'initial',
+          role: 'assistant',
+          content: openingMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    } else {
+      sendToModel([], 'Please greet me briefly and ask the first interview question.', {
+        hidden: true,
+      });
+    }
+  }, [sessionId, openingMessage, sendToModel]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -49,93 +165,16 @@ Take your time to think through your answer, and feel free to include code examp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    if (!input.trim() || isLoading || hasEnded) return;
+    const content = input.trim();
     setInput('');
-    setIsLoading(true);
-    setStreamingContent('');
+    await sendToModel(messages, content);
+  };
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'system',
-              content: `You are an experienced senior frontend engineer conducting a technical interview. 
-              Ask follow-up questions based on the candidate's responses. 
-              Provide constructive feedback. Keep responses focused and professional.
-              After 2-3 follow-ups on a topic, offer to move to a new question.`,
-            },
-            ...messages.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: input.trim() },
-          ],
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (reader) {
-        let accumulatedContent = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
-
-          for (const line of lines) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                accumulatedContent += data.content;
-                setStreamingContent(accumulatedContent);
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
-
-        // Add final message
-        const assistantMessage: Message = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: accumulatedContent,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-        setStreamingContent('');
-      }
-    } catch (error) {
-      console.error('Chat error:', error);
-      // Add error message
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleEndInterview = async () => {
+    if (isLoading || hasEnded) return;
+    setHasEnded(true);
+    await sendToModel(messages, END_INTERVIEW_INSTRUCTION, { hidden: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -152,7 +191,7 @@ Take your time to think through your answer, and feel free to include code examp
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
-        
+
         {/* Streaming message */}
         {streamingContent && (
           <MessageBubble
@@ -178,25 +217,50 @@ Take your time to think through your answer, and feel free to include code examp
 
       {/* Input */}
       <div className="border-t p-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your answer... (Shift+Enter for new line)"
-            rows={3}
-            className="flex-1 p-3 rounded-lg border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </form>
+        {hasEnded ? (
+          <div className="flex items-center justify-center gap-3 py-2">
+            <p className="text-sm text-muted-foreground">Interview finished.</p>
+            <Button asChild size="sm">
+              <Link href="/interview">Start a New Interview</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/flashcards/study">Study Weak Spots</Link>
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your answer... (Shift+Enter for new line)"
+              rows={3}
+              className="flex-1 p-3 rounded-lg border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              disabled={isLoading}
+            />
+            <div className="flex flex-col gap-2">
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="flex-1 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Send answer"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleEndInterview}
+                disabled={isLoading || messages.length < 2}
+                className="px-4 py-2 rounded-lg border text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="End the interview and get your debrief"
+                aria-label="End interview and get feedback"
+              >
+                <Flag className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -214,9 +278,7 @@ function MessageBubble({ message }: { message: Message }) {
             : 'bg-muted rounded-bl-md'
         }`}
       >
-        <div className={`prose prose-sm ${isUser ? 'prose-invert' : 'dark:prose-invert'} max-w-none`}>
-          <MarkdownRenderer content={message.content} />
-        </div>
+        <MarkdownRenderer content={message.content} />
         <div className={`text-xs mt-1 ${isUser ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>

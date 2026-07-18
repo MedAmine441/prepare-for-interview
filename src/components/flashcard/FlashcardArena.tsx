@@ -52,6 +52,11 @@ interface FlashcardArenaProps {
    *            schedule is never touched. Good right before an interview.
    */
   mode?: StudyMode;
+  /**
+   * Practice mode only: restrict the deck to these question ids
+   * (e.g. cramming the weak spots found by a mock interview).
+   */
+  questionIds?: string[];
 }
 
 interface RatingTally {
@@ -75,6 +80,7 @@ export function FlashcardArena({
   category,
   difficulty,
   mode = "review",
+  questionIds,
 }: FlashcardArenaProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [showFullAnswer, setShowFullAnswer] = useState(false);
@@ -178,12 +184,18 @@ export function FlashcardArena({
         return;
       }
 
-      if (result.data.length === 0) {
+      let cards = result.data;
+      if (questionIds && questionIds.length > 0) {
+        const idSet = new Set(questionIds);
+        cards = cards.filter((q) => idSet.has(q.id as string));
+      }
+
+      if (cards.length === 0) {
         setSessionComplete(true);
         return;
       }
 
-      setDeck(shuffle(result.data));
+      setDeck(shuffle(cards));
       setDeckIndex(0);
       setCardCount(1);
     } catch (err) {
@@ -192,7 +204,7 @@ export function FlashcardArena({
     } finally {
       setIsLoading(false);
     }
-  }, [category, difficulty]);
+  }, [category, difficulty, questionIds]);
 
   useEffect(() => {
     setSessionComplete(false);

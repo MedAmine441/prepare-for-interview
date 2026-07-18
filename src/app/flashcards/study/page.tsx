@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, Loader2 } from "lucide-react";
@@ -33,6 +33,12 @@ function StudyPageContent() {
   const category = (searchParams.get("category") || "all") as QuestionCategory | "all";
   const difficulty = (searchParams.get("difficulty") || "all") as Difficulty | "all";
   const mode: StudyMode = searchParams.get("mode") === "practice" ? "practice" : "review";
+  // Optional cram list, e.g. the weak spots handed over by a mock interview
+  const idsParam = searchParams.get("ids");
+  const questionIds = useMemo(
+    () => (idsParam ? idsParam.split(",").filter(Boolean) : undefined),
+    [idsParam],
+  );
 
   const updateParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -77,6 +83,7 @@ function StudyPageContent() {
           category={category === "all" ? undefined : category}
           difficulty={difficulty === "all" ? undefined : difficulty}
           mode={mode}
+          questionIds={questionIds}
         />
       </div>
     </div>

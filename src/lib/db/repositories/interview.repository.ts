@@ -192,6 +192,19 @@ export const interviewRepository = {
     return session;
   },
 
+  async updateAnalysis(
+    sessionId: SessionId,
+    analysis: NonNullable<InterviewSession['analysis']>,
+  ): Promise<InterviewSession | null> {
+    const session = readSession(sessionId);
+    if (!session) return null;
+
+    session.analysis = analysis;
+    writeSession(session);
+
+    return session;
+  },
+
   async endSession(sessionId: SessionId): Promise<InterviewSession | null> {
     return this.updateStatus(sessionId, 'completed');
   },

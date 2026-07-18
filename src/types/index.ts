@@ -66,6 +66,8 @@ export type {
   ChatMessage,
   InterviewConfig,
   InterviewSession,
+  QuestionVerdict,
+  SessionAnalysis,
   StartSessionInput,
   SendMessageInput,
   InterviewerResponse,

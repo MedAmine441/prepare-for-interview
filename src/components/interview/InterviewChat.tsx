@@ -4,9 +4,14 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Send, Loader2, Flag } from 'lucide-react';
+import { Send, Loader2, Flag, Target } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { Button } from '@/components/ui/button';
+import {
+  saveInterviewTranscript,
+  completeInterview,
+  type InterviewAnalysisResult,
+} from '@/actions/interview.actions';
 
 interface Message {
   id: string;
@@ -14,6 +19,11 @@ interface Message {
   content: string;
   timestamp: Date;
 }
+
+type AnalysisState =
+  | { status: 'loading' }
+  | { status: 'done'; result: InterviewAnalysisResult }
+  | { status: 'error'; error: string };
 
 interface InterviewChatProps {
   sessionId: string;
@@ -35,25 +45,32 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [hasEnded, setHasEnded] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bootstrappedRef = useRef(false);
 
   const sendToModel = useCallback(
-    async (history: Message[], userContent: string, options: { hidden?: boolean } = {}) => {
+    async (
+      history: Message[],
+      userContent: string,
+      options: { hidden?: boolean } = {},
+    ): Promise<string | null> => {
       setIsLoading(true);
       setStreamingContent('');
 
+      const userMessage: Message = {
+        id: `u-${Date.now()}`,
+        role: 'user',
+        content: userContent,
+        timestamp: new Date(),
+      };
+      // Hidden instructions (bootstrap, end-of-interview) stay out of the
+      // visible chat and the persisted transcript
+      const visibleTurn = options.hidden ? [...history] : [...history, userMessage];
+
       if (!options.hidden) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `u-${Date.now()}`,
-            role: 'user',
-            content: userContent,
-            timestamp: new Date(),
-          },
-        ]);
+        setMessages((prev) => [...prev, userMessage]);
       }
 
       try {
@@ -105,19 +122,25 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
         }
 
         if (accumulatedContent) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `a-${Date.now()}`,
-              role: 'assistant',
-              content: accumulatedContent,
-              timestamp: new Date(),
-            },
-          ]);
+          const assistantMessage: Message = {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            content: accumulatedContent,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+
+          // Persist the transcript so the session survives navigation
+          const finalTranscript = [...visibleTurn, assistantMessage];
+          saveInterviewTranscript(
+            sessionId,
+            finalTranscript.map((m) => ({ role: m.role, content: m.content })),
+          ).catch((err) => console.error('Failed to save transcript:', err));
         } else {
           throw new Error('Empty response');
         }
         setStreamingContent('');
+        return accumulatedContent;
       } catch (error) {
         console.error('Chat error:', error);
         setMessages((prev) => [
@@ -130,11 +153,12 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
             timestamp: new Date(),
           },
         ]);
+        return null;
       } finally {
         setIsLoading(false);
       }
     },
-    [systemPrompt],
+    [systemPrompt, sessionId],
   );
 
   // Open the interview: deterministic bank opening, or ask the model to start
@@ -174,7 +198,24 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
   const handleEndInterview = async () => {
     if (isLoading || hasEnded) return;
     setHasEnded(true);
-    await sendToModel(messages, END_INTERVIEW_INSTRUCTION, { hidden: true });
+    const debrief = await sendToModel(messages, END_INTERVIEW_INSTRUCTION, {
+      hidden: true,
+    });
+
+    // Close the loop: persist the debrief and turn transcript gaps into
+    // due flashcards
+    setAnalysis({ status: 'loading' });
+    try {
+      const result = await completeInterview(sessionId, debrief ?? '');
+      if (result.success) {
+        setAnalysis({ status: 'done', result: result.data });
+      } else {
+        setAnalysis({ status: 'error', error: result.error });
+      }
+    } catch (err) {
+      console.error(err);
+      setAnalysis({ status: 'error', error: 'Failed to analyze the interview' });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -218,14 +259,71 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
       {/* Input */}
       <div className="border-t p-4">
         {hasEnded ? (
-          <div className="flex items-center justify-center gap-3 py-2">
-            <p className="text-sm text-muted-foreground">Interview finished.</p>
-            <Button asChild size="sm">
-              <Link href="/interview">Start a New Interview</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/flashcards/study">Study Weak Spots</Link>
-            </Button>
+          <div className="py-2 space-y-3">
+            {analysis?.status === 'loading' && (
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Analyzing your answers to find weak spots...
+              </div>
+            )}
+            {analysis?.status === 'error' && (
+              <p className="text-sm text-muted-foreground text-center">
+                {analysis.error} — the debrief above still has your feedback.
+              </p>
+            )}
+            {analysis?.status === 'done' &&
+              analysis.result.analyzed &&
+              (analysis.result.weakQuestions.length > 0 ? (
+                <div className="max-w-lg mx-auto">
+                  <p className="text-sm font-medium text-center mb-2">
+                    <Target className="w-4 h-4 inline mr-1.5 text-orange-600 dark:text-orange-400" />
+                    {analysis.result.weakQuestions.length} weak spot
+                    {analysis.result.weakQuestions.length > 1 ? 's' : ''} added to
+                    your review queue
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-1 mb-1">
+                    {analysis.result.weakQuestions.map((q) => (
+                      <li key={q.id} className="truncate">
+                        • {q.question}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">
+                  No major gaps found — solid interview ({analysis.result.strongCount}{' '}
+                  strong, {analysis.result.okCount} partial).
+                </p>
+              ))}
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {analysis?.status === 'done' &&
+                analysis.result.weakQuestions.length > 0 && (
+                  <Button asChild size="sm">
+                    <Link
+                      href={`/flashcards/study?mode=practice&ids=${analysis.result.weakQuestions
+                        .map((q) => q.id)
+                        .join(',')}`}
+                    >
+                      Cram Weak Spots Now
+                    </Link>
+                  </Button>
+                )}
+              <Button
+                asChild
+                size="sm"
+                variant={
+                  analysis?.status === 'done' &&
+                  analysis.result.weakQuestions.length > 0
+                    ? 'outline'
+                    : 'default'
+                }
+              >
+                <Link href="/interview">Start a New Interview</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/interview/history">Past Sessions</Link>
+              </Button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex gap-2">

@@ -1,382 +1,336 @@
 // src/actions/interview.actions.ts
 
-'use server';
+"use server";
 
-import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
-import { interviewRepository, questionRepository } from '@/lib/db/repositories';
-import { getKimiClient } from '@/lib/ai/kimi-client';
-import type { 
-  InterviewSession, 
-  SessionId,
-  ChatMessage,
-  InterviewConfig,
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import {
+  interviewRepository,
+  questionRepository,
+  progressRepository,
+} from "@/lib/db/repositories";
+import {
+  createQuestionId,
+  createSessionId,
+  QUESTION_CATEGORIES,
+  QUALITY_BUTTONS,
+} from "@/types";
+import type {
+  InterviewSession,
   QuestionCategory,
+  QuestionVerdict,
   Question,
-} from '@/types';
-import { createSessionId, DEFAULT_INTERVIEW_CONFIG } from '@/types';
+} from "@/types";
 
-/**
- * Input validation schemas
- */
-const StartSessionSchema = z.object({
-  categories: z.array(z.string()).default([]),
-  difficulty: z.enum(['junior', 'mid', 'senior']).default('mid'),
-  mode: z.enum(['seed-only', 'ai-generated', 'mixed']).default('mixed'),
-  maxQuestions: z.number().min(1).max(20).default(5),
-  enableFollowUps: z.boolean().default(true),
-});
+const KIMI_API_KEY = process.env.KIMI_API_KEY;
+const KIMI_BASE_URL = process.env.KIMI_BASE_URL || "https://api.moonshot.ai/v1";
+const KIMI_MODEL = process.env.KIMI_MODEL || "kimi-k2.6";
 
-const SendMessageSchema = z.object({
-  sessionId: z.string().min(1, 'Session ID is required'),
-  content: z.string().min(1, 'Message content is required'),
-});
-
-/**
- * Action result type
- */
-type ActionResult<T> = 
+type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+const StartInterviewSchema = z.object({
+  categories: z.array(
+    z.enum(
+      Object.values(QUESTION_CATEGORIES) as [QuestionCategory, ...QuestionCategory[]],
+    ),
+  ),
+  difficulty: z.enum(["junior", "mid", "senior"] as const),
+  mode: z.enum(["seed-only", "ai-generated", "mixed"] as const),
+  maxQuestions: z.number().min(1).max(10),
+});
+
+export type StartInterviewInput = z.infer<typeof StartInterviewSchema>;
+
 /**
- * Start a new interview session
+ * Create a persisted interview session: pick the bank questions now and
+ * store their ids so the session page renders the same interview on refresh.
  */
-export async function startInterviewSession(
-  formData: FormData
-): Promise<ActionResult<InterviewSession>> {
+export async function startInterview(
+  input: StartInterviewInput,
+): Promise<ActionResult<{ sessionId: string }>> {
   try {
-    // Parse form data
-    const rawInput = {
-      categories: formData.getAll('categories') as string[],
-      difficulty: formData.get('difficulty') || 'mid',
-      mode: formData.get('mode') || 'mixed',
-      maxQuestions: Number(formData.get('maxQuestions')) || 5,
-      enableFollowUps: formData.get('enableFollowUps') !== 'false',
-    };
-    
-    const validationResult = StartSessionSchema.safeParse(rawInput);
-    
-    if (!validationResult.success) {
-      const errors = validationResult.error.issues
-        .map(issue => issue.message)
-        .join(', ');
-      return { success: false, error: errors };
+    const parsed = StartInterviewSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: "Invalid interview options" };
     }
-    
-    const config = validationResult.data;
-    
-    // Create session
+    const { categories, difficulty, mode, maxQuestions } = parsed.data;
+
+    // Any still-active session was walked away from — tidy it up
+    const actives = await interviewRepository.findActive();
+    for (const stale of actives) {
+      await interviewRepository.updateStatus(stale.id, "abandoned");
+    }
+
+    const bankQuestions =
+      mode === "ai-generated"
+        ? []
+        : shuffle(
+            await questionRepository.findAll({
+              categories: categories.length > 0 ? categories : undefined,
+              difficulties: [difficulty],
+            }),
+          ).slice(0, maxQuestions);
+
     const session = await interviewRepository.create({
-      config: {
-        ...DEFAULT_INTERVIEW_CONFIG,
-        categories: config.categories as QuestionCategory[],
-        difficulty: config.difficulty,
-        mode: config.mode,
-        maxQuestions: config.maxQuestions,
-        enableFollowUps: config.enableFollowUps,
-      },
+      config: { categories, difficulty, mode, maxQuestions },
     });
-    
-    // Add initial system message
-    await interviewRepository.addMessage(session.id, {
-      role: 'system',
-      content: `Interview session started. Focus: ${config.categories.length > 0 ? config.categories.join(', ') : 'All topics'}. Difficulty: ${config.difficulty}.`,
-      contentType: 'text',
-    });
-    
-    // Get first question and add interviewer message
-    const firstQuestion = await getNextQuestion(session);
-    
-    if (firstQuestion) {
-      await interviewRepository.addMessage(session.id, {
-        role: 'interviewer',
-        content: `Welcome! Let's start with this question:\n\n${firstQuestion.question}`,
-        contentType: 'markdown',
-        questionId: firstQuestion.id,
-      });
-      
-      await interviewRepository.markQuestionAsked(session.id, firstQuestion.id);
+    for (const q of bankQuestions) {
+      await interviewRepository.markQuestionAsked(session.id, q.id);
     }
-    
-    // Fetch updated session
-    const updatedSession = await interviewRepository.findById(session.id);
-    
-    revalidatePath('/interview');
-    
-    return { success: true, data: updatedSession! };
+
+    revalidatePath("/interview");
+    return { success: true, data: { sessionId: session.id } };
   } catch (error) {
-    console.error('Error starting interview session:', error);
-    return { success: false, error: 'Failed to start interview session' };
+    console.error("Error starting interview:", error);
+    return { success: false, error: "Failed to start interview" };
   }
 }
 
+const TranscriptSchema = z.array(
+  z.object({
+    role: z.enum(["user", "assistant"] as const),
+    content: z.string(),
+  }),
+);
+
 /**
- * Send a message in an interview session
+ * Persist the chat transcript (called after each completed turn).
+ * Overwrites the stored messages — sessions are low-volume documents.
  */
-export async function sendInterviewMessage(
-  formData: FormData
-): Promise<ActionResult<{
-  userMessage: ChatMessage;
-  interviewerResponse: ChatMessage;
-}>> {
+export async function saveInterviewTranscript(
+  sessionId: string,
+  transcript: Array<{ role: "user" | "assistant"; content: string }>,
+): Promise<ActionResult<void>> {
   try {
-    const rawInput = {
-      sessionId: formData.get('sessionId'),
-      content: formData.get('content'),
-    };
-    
-    const validationResult = SendMessageSchema.safeParse(rawInput);
-    
-    if (!validationResult.success) {
-      const errors = validationResult.error.issues
-        .map(issue => issue.message)
-        .join(', ');
-      return { success: false, error: errors };
+    const parsed = TranscriptSchema.safeParse(transcript);
+    if (!parsed.success) {
+      return { success: false, error: "Invalid transcript" };
     }
-    
-    const { sessionId, content } = validationResult.data;
-    const typedSessionId = createSessionId(sessionId);
-    
-    // Get session
-    const session = await interviewRepository.findById(typedSessionId);
-    if (!session) {
-      return { success: false, error: 'Session not found' };
+
+    const id = createSessionId(sessionId);
+    const session = await interviewRepository.findById(id);
+    if (!session) return { success: false, error: "Session not found" };
+
+    session.messages = [];
+    await interviewRepository.addMessages(
+      id,
+      parsed.data.map((m) => ({
+        role: m.role === "assistant" ? ("interviewer" as const) : ("user" as const),
+        content: m.content,
+        contentType: "markdown" as const,
+      })),
+    );
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("Error saving transcript:", error);
+    return { success: false, error: "Failed to save transcript" };
+  }
+}
+
+export interface InterviewAnalysisResult {
+  /** Bank questions the candidate struggled with, now rescheduled for review */
+  weakQuestions: Array<{ id: string; question: string; category: string }>;
+  okCount: number;
+  strongCount: number;
+  /** False when the session had no bank questions to map (pure AI interviews) */
+  analyzed: boolean;
+}
+
+const VerdictSchema = z.array(
+  z.object({
+    id: z.string(),
+    verdict: z.enum(["weak", "ok", "strong", "skipped"] as const),
+  }),
+);
+
+/**
+ * Complete the interview: store the debrief, grade each asked bank question
+ * from the transcript, and mark weak ones "Again" so SM-2 brings them back.
+ */
+export async function completeInterview(
+  sessionId: string,
+  debrief: string,
+): Promise<ActionResult<InterviewAnalysisResult>> {
+  try {
+    const id = createSessionId(sessionId);
+    const session = await interviewRepository.findById(id);
+    if (!session) return { success: false, error: "Session not found" };
+
+    await interviewRepository.updateNotes(id, debrief);
+    await interviewRepository.updateStatus(id, "completed");
+    revalidatePath("/interview");
+
+    const askedQuestions = (
+      await Promise.all(
+        session.questionsAsked.map((qid) => questionRepository.findById(qid)),
+      )
+    ).filter((q): q is Question => q !== null);
+
+    if (askedQuestions.length === 0 || !KIMI_API_KEY) {
+      return {
+        success: true,
+        data: { weakQuestions: [], okCount: 0, strongCount: 0, analyzed: false },
+      };
     }
-    
-    if (session.status !== 'active') {
-      return { success: false, error: 'Session is not active' };
-    }
-    
-    // Add user message
-    const userMessage = await interviewRepository.addMessage(typedSessionId, {
-      role: 'user',
-      content,
-      contentType: 'text',
+
+    const transcript = session.messages
+      .map(
+        (m) =>
+          `${m.role === "interviewer" ? "INTERVIEWER" : "CANDIDATE"}: ${m.content}`,
+      )
+      .join("\n\n");
+
+    const prompt = `You are analyzing a finished mock frontend interview to find the candidate's weak spots.
+
+## Questions planned for this interview (with grading rubric)
+${askedQuestions
+  .map(
+    (q, i) =>
+      `${i + 1}. [id: ${q.id}] ${q.question}\n   Key points a strong answer covers: ${q.keyPoints.join("; ")}`,
+  )
+  .join("\n")}
+
+## Transcript
+${transcript}
+
+For each planned question, judge how the candidate actually performed in the transcript:
+- "weak": struggled, major gaps, wrong, or gave up
+- "ok": partial answer with notable gaps
+- "strong": covered most key points confidently
+- "skipped": the question was never asked or never answered
+
+Respond with ONLY a JSON array (no markdown fences, no commentary):
+[{"id": "the question id", "verdict": "weak|ok|strong|skipped"}]`;
+
+    const response = await fetchWithRetry(`${KIMI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: KIMI_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 8192,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(180_000),
     });
-    
-    // Generate AI response
-    const aiResponse = await generateInterviewerResponse(session, content);
-    
-    // Add interviewer message
-    const interviewerMessage = await interviewRepository.addMessage(typedSessionId, {
-      role: 'interviewer',
-      content: aiResponse,
-      contentType: 'markdown',
+
+    if (!response.ok) {
+      console.error("Kimi analysis error:", await response.text());
+      return {
+        success: true,
+        data: { weakQuestions: [], okCount: 0, strongCount: 0, analyzed: false },
+      };
+    }
+
+    const data = await response.json();
+    const content: string = data.choices?.[0]?.message?.content || "";
+    const parsed = extractJsonArray(content);
+    const validated = VerdictSchema.safeParse(parsed);
+    if (!validated.success) {
+      console.error("Unparseable analysis output:", content.slice(0, 1000));
+      return {
+        success: true,
+        data: { weakQuestions: [], okCount: 0, strongCount: 0, analyzed: false },
+      };
+    }
+
+    const askedById = new Map(askedQuestions.map((q) => [q.id as string, q]));
+    const verdicts = validated.data.filter((v) => askedById.has(v.id));
+
+    await interviewRepository.updateAnalysis(id, {
+      verdicts: verdicts.map((v) => ({
+        questionId: createQuestionId(v.id),
+        verdict: v.verdict as QuestionVerdict,
+      })),
+      analyzedAt: new Date().toISOString(),
     });
-    
-    revalidatePath(`/interview/${sessionId}`);
-    
+
+    // Weak answers become due reviews: record an "Again" so SM-2 resets them
+    const weakQuestions: InterviewAnalysisResult["weakQuestions"] = [];
+    for (const v of verdicts) {
+      if (v.verdict !== "weak") continue;
+      const q = askedById.get(v.id)!;
+      weakQuestions.push({
+        id: q.id as string,
+        question: q.question,
+        category: q.category,
+      });
+      await progressRepository.recordReview({
+        questionId: q.id,
+        quality: QUALITY_BUTTONS.AGAIN,
+        responseTimeMs: 0,
+        wasRevealed: true,
+      });
+    }
+
+    revalidatePath("/flashcards");
+    revalidatePath("/");
+
     return {
       success: true,
       data: {
-        userMessage,
-        interviewerResponse: interviewerMessage,
+        weakQuestions,
+        okCount: verdicts.filter((v) => v.verdict === "ok").length,
+        strongCount: verdicts.filter((v) => v.verdict === "strong").length,
+        analyzed: true,
       },
     };
   } catch (error) {
-    console.error('Error sending interview message:', error);
-    return { success: false, error: 'Failed to send message' };
+    console.error("Error completing interview:", error);
+    return { success: false, error: "Failed to analyze the interview" };
   }
 }
 
 /**
- * End an interview session
- */
-export async function endInterviewSession(
-  sessionId: string
-): Promise<ActionResult<InterviewSession>> {
-  try {
-    const typedSessionId = createSessionId(sessionId);
-    
-    // Update session status
-    const session = await interviewRepository.updateStatus(typedSessionId, 'completed');
-    
-    if (!session) {
-      return { success: false, error: 'Session not found' };
-    }
-    
-    // Add closing message
-    await interviewRepository.addMessage(typedSessionId, {
-      role: 'interviewer',
-      content: 'Great job! The interview session is now complete. Review your conversation to see areas for improvement.',
-      contentType: 'text',
-    });
-    
-    revalidatePath('/interview');
-    revalidatePath(`/interview/${sessionId}`);
-    
-    return { success: true, data: session };
-  } catch (error) {
-    console.error('Error ending interview session:', error);
-    return { success: false, error: 'Failed to end session' };
-  }
-}
-
-/**
- * Get session by ID
- */
-export async function getInterviewSession(
-  sessionId: string
-): Promise<ActionResult<InterviewSession | null>> {
-  try {
-    const session = await interviewRepository.findById(createSessionId(sessionId));
-    return { success: true, data: session };
-  } catch (error) {
-    console.error('Error fetching session:', error);
-    return { success: false, error: 'Failed to fetch session' };
-  }
-}
-
-/**
- * Get recent interview sessions
+ * List past (non-active) sessions for the history page.
  */
 export async function getRecentSessions(
-  limit: number = 10
+  limit: number = 20,
 ): Promise<ActionResult<InterviewSession[]>> {
   try {
     const sessions = await interviewRepository.getRecent(limit);
     return { success: true, data: sessions };
   } catch (error) {
-    console.error('Error fetching recent sessions:', error);
-    return { success: false, error: 'Failed to fetch sessions' };
+    console.error("Error fetching recent sessions:", error);
+    return { success: false, error: "Failed to fetch sessions" };
   }
 }
 
-/**
- * Get interview statistics
- */
-export async function getInterviewStats(): Promise<ActionResult<{
-  totalSessions: number;
-  completedSessions: number;
-  averageSessionDuration: number;
-  averageQuestionsPerSession: number;
-}>> {
+function shuffle<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+/** Retry once on transient network errors (connect timeouts etc.) */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
   try {
-    const stats = await interviewRepository.getStats();
-    return { success: true, data: stats };
+    return await fetch(url, init);
   } catch (error) {
-    console.error('Error fetching interview stats:', error);
-    return { success: false, error: 'Failed to fetch statistics' };
+    if (error instanceof Error && error.name === "TimeoutError") throw error;
+    await new Promise((r) => setTimeout(r, 1000));
+    return fetch(url, init);
   }
 }
 
-/**
- * Update session notes
- */
-export async function updateSessionNotes(
-  sessionId: string,
-  notes: string
-): Promise<ActionResult<void>> {
+/** Extract the first JSON array from model output, tolerating fences/preamble */
+function extractJsonArray(text: string): unknown[] | null {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) return null;
   try {
-    await interviewRepository.updateNotes(createSessionId(sessionId), notes);
-    revalidatePath(`/interview/${sessionId}`);
-    return { success: true, data: undefined };
-  } catch (error) {
-    console.error('Error updating session notes:', error);
-    return { success: false, error: 'Failed to update notes' };
-  }
-}
-
-/**
- * Helper: Get next question for the session
- */
-async function getNextQuestion(session: InterviewSession): Promise<Question | null> {
-  const { config, questionsAsked } = session;
-  
-  // For seed-only or mixed mode, try to get a seed question first
-  if (config.mode !== 'ai-generated') {
-    const questions = await questionRepository.getRandomQuestions(1, {
-      category: config.categories[0],
-      difficulty: config.difficulty,
-      excludeIds: questionsAsked,
-    });
-    
-    if (questions.length > 0) {
-      return questions[0];
-    }
-  }
-  
-  // No seed questions available or AI-only mode
-  return null;
-}
-
-/**
- * Helper: Generate interviewer response using AI
- */
-async function generateInterviewerResponse(
-  session: InterviewSession,
-  userMessage: string
-): Promise<string> {
-  try {
-    const kimi = getKimiClient();
-    
-    // Build conversation history for context
-    const conversationHistory = session.messages
-      .filter(m => m.role !== 'system')
-      .slice(-10) // Last 10 messages for context
-      .map(m => ({
-        role: m.role === 'interviewer' ? 'assistant' : 'user',
-        content: m.content,
-      })) as Array<{ role: 'user' | 'assistant'; content: string }>;
-    
-    // Get the current question being discussed
-    const currentQuestionId = session.questionsAsked[session.questionsAsked.length - 1];
-    let currentQuestion: Question | null = null;
-    
-    if (currentQuestionId) {
-      currentQuestion = await questionRepository.findById(currentQuestionId);
-    }
-    
-    // If we have a current question, evaluate the answer
-    if (currentQuestion) {
-      const evaluation = await kimi.evaluateAnswer(
-        currentQuestion.question,
-        currentQuestion.keyPoints,
-        userMessage
-      );
-      
-      // Build response based on evaluation
-      let response = '';
-      
-      if (evaluation.coveredPoints.length > 0) {
-        response += `Good points! You covered:\n${evaluation.coveredPoints.map(p => `- ${p}`).join('\n')}\n\n`;
-      }
-      
-      if (evaluation.missedPoints.length > 0) {
-        response += `You might also want to consider:\n${evaluation.missedPoints.map(p => `- ${p}`).join('\n')}\n\n`;
-      }
-      
-      if (evaluation.suggestions.length > 0) {
-        response += `Suggestions:\n${evaluation.suggestions.map(s => `- ${s}`).join('\n')}\n\n`;
-      }
-      
-      // Add follow-up or next question
-      if (session.config.enableFollowUps && evaluation.followUpQuestion) {
-        response += `Follow-up question: ${evaluation.followUpQuestion}`;
-      } else if (session.questionsAsked.length < session.config.maxQuestions) {
-        const nextQuestion = await getNextQuestion({
-          ...session,
-          questionsAsked: [...session.questionsAsked],
-        });
-        
-        if (nextQuestion) {
-          response += `\n\nLet's move on to the next question:\n\n${nextQuestion.question}`;
-          await interviewRepository.markQuestionAsked(session.id, nextQuestion.id);
-        } else {
-          response += "\n\nThat covers our prepared questions. Would you like to continue discussing any topic in more depth?";
-        }
-      } else {
-        response += "\n\nWe've covered all the planned questions. Great session! You can end the interview when you're ready.";
-      }
-      
-      return response;
-    }
-    
-    // Fallback to general chat response
-    return await kimi.interviewChat(conversationHistory, userMessage);
-  } catch (error) {
-    console.error('Error generating AI response:', error);
-    return "I apologize, but I'm having trouble generating a response. Let's continue - feel free to ask about any frontend topic you'd like to discuss.";
+    const result = JSON.parse(text.slice(start, end + 1));
+    return Array.isArray(result) ? result : null;
+  } catch {
+    return null;
   }
 }

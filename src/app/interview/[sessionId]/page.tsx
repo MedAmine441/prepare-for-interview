@@ -1,46 +1,40 @@
 // src/app/interview/[sessionId]/page.tsx
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { InterviewChat } from "@/components/interview/InterviewChat";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { questionRepository } from "@/lib/db/repositories";
+import { interviewRepository, questionRepository } from "@/lib/db/repositories";
 import { formatCategory } from "@/lib/utils/question-format";
-import type { QuestionCategory, Difficulty } from "@/types";
+import { createSessionId } from "@/types";
+import type { Question } from "@/types";
 
 interface SessionPageProps {
   params: Promise<{
     sessionId: string;
   }>;
-  searchParams: Promise<{
-    categories?: string;
-    difficulty?: string;
-    mode?: string;
-    maxQuestions?: string;
-  }>;
 }
 
-export default async function InterviewSessionPage({ params, searchParams }: SessionPageProps) {
+export default async function InterviewSessionPage({ params }: SessionPageProps) {
   const { sessionId } = await params;
-  const sp = await searchParams;
 
-  const categories = (sp.categories?.split(",").filter(Boolean) ?? []) as QuestionCategory[];
-  const difficulty = (sp.difficulty || "mid") as Difficulty;
-  const mode = sp.mode || "mixed";
-  const maxQuestions = Math.min(Math.max(parseInt(sp.maxQuestions || "5", 10) || 5, 1), 10);
+  // Sessions are created by the setup page before navigating here
+  const session = await interviewRepository.findById(createSessionId(sessionId));
+  if (!session) {
+    redirect("/interview");
+  }
 
-  // Pull real questions from the bank matching the chosen filters
-  const bankQuestions =
-    mode === "ai-generated"
-      ? []
-      : shuffle(
-          await questionRepository.findAll({
-            categories: categories.length > 0 ? categories : undefined,
-            difficulties: [difficulty],
-          }),
-        ).slice(0, maxQuestions);
+  const { categories, difficulty, mode, maxQuestions } = session.config;
+
+  // The bank questions were picked at session start — same set on every render
+  const bankQuestions = (
+    await Promise.all(
+      session.questionsAsked.map((id) => questionRepository.findById(id)),
+    )
+  ).filter((q): q is Question => q !== null);
 
   const topicLabel =
     categories.length > 0
@@ -146,13 +140,4 @@ Rules:
 - After the final question — or if the candidate asks to stop — give an overall debrief: strengths, the top 3 gaps, and the specific topics they should study next.`;
 
   return prompt;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const result = [...arr];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
 }

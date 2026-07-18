@@ -125,6 +125,18 @@ export const DEFAULT_INTERVIEW_CONFIG: InterviewConfig = {
 };
 
 /**
+ * Post-interview gap analysis — maps transcript performance back to
+ * the bank questions asked so study can target weak spots.
+ */
+export type QuestionVerdict = 'weak' | 'ok' | 'strong' | 'skipped';
+
+export interface SessionAnalysis {
+  /** Verdict per asked bank question */
+  verdicts: Array<{ questionId: QuestionId; verdict: QuestionVerdict }>;
+  analyzedAt: string;
+}
+
+/**
  * Interview session
  */
 export interface InterviewSession {
@@ -162,9 +174,14 @@ export interface InterviewSession {
   endedAt: string | null;
 
   /**
-   * Session notes (user can add notes during/after)
+   * Session notes — holds the end-of-interview debrief markdown
    */
   notes: string;
+
+  /**
+   * Gap analysis computed when the interview completes
+   */
+  analysis?: SessionAnalysis;
 }
 
 /**

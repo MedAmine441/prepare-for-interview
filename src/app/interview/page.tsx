@@ -4,7 +4,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Check } from "lucide-react";
+import Link from "next/link";
+import { Play, Check, History, Loader2 } from "lucide-react";
+import { startInterview } from "@/actions/interview.actions";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
 import { getCategoryEmoji } from "@/lib/utils/question-format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,8 @@ export default function InterviewSetupPage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("mid");
   const [mode, setMode] = useState<InterviewMode>("mixed");
   const [maxQuestions, setMaxQuestions] = useState(5);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   const handleCategoryToggle = (category: QuestionCategory) => {
     setSelectedCategories((prev) =>
@@ -28,25 +32,46 @@ export default function InterviewSetupPage() {
     );
   };
 
-  const handleStartInterview = () => {
-    const params = new URLSearchParams({
-      categories: selectedCategories.join(","),
-      difficulty,
-      mode,
-      maxQuestions: maxQuestions.toString(),
-    });
-    // Unique id so a fresh session remounts the chat cleanly
-    const sessionId = Date.now().toString(36);
-    router.push(`/interview/${sessionId}?${params.toString()}`);
+  const handleStartInterview = async () => {
+    if (isStarting) return;
+    setIsStarting(true);
+    setStartError(null);
+    try {
+      // Persist the session up front so the transcript and debrief survive
+      const result = await startInterview({
+        categories: selectedCategories,
+        difficulty,
+        mode,
+        maxQuestions,
+      });
+      if (!result.success) {
+        setStartError(result.error);
+        return;
+      }
+      router.push(`/interview/${result.data.sessionId}`);
+    } catch (err) {
+      console.error(err);
+      setStartError("Failed to start the interview. Please try again.");
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight mb-2">Mock Interview</h1>
-        <p className="text-muted-foreground">
-          Configure your interview session and start practicing.
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-2">Mock Interview</h1>
+          <p className="text-muted-foreground">
+            Configure your interview session and start practicing.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/interview/history">
+            <History className="w-4 h-4 mr-1.5" />
+            Past sessions
+          </Link>
+        </Button>
       </div>
 
       <div className="space-y-8">
@@ -182,10 +207,24 @@ export default function InterviewSetupPage() {
         </Card>
 
         {/* Start */}
-        <Button onClick={handleStartInterview} className="w-full" size="lg">
-          <Play className="w-4 h-4 mr-2" />
-          Start Interview
+        <Button
+          onClick={handleStartInterview}
+          className="w-full"
+          size="lg"
+          disabled={isStarting}
+        >
+          {isStarting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Play className="w-4 h-4 mr-2" />
+          )}
+          {isStarting ? "Setting up..." : "Start Interview"}
         </Button>
+        {startError && (
+          <p className="text-sm text-red-600 dark:text-red-400 text-center">
+            {startError}
+          </p>
+        )}
       </div>
     </div>
   );

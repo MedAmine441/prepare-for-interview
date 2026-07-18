@@ -461,10 +461,11 @@ export function FlashcardArena({
           {/* Front */}
           <Card
             onClick={handleFlip}
-            className={`flashcard-front cursor-pointer ${
-              isFlipped ? "absolute inset-0 overflow-hidden" : "relative min-h-[280px]"
+            className={`flashcard-front cursor-pointer overflow-hidden shadow-md ${
+              isFlipped ? "absolute inset-0" : "relative min-h-[280px]"
             }`}
           >
+            <div className="h-1 bg-brand-gradient" aria-hidden />
             <CardContent className="p-6 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <Badge
@@ -492,10 +493,11 @@ export function FlashcardArena({
 
           {/* Back */}
           <Card
-            className={`flashcard-back ${
-              isFlipped ? "relative min-h-[280px]" : "absolute inset-0 overflow-hidden"
+            className={`flashcard-back overflow-hidden shadow-md ${
+              isFlipped ? "relative min-h-[280px]" : "absolute inset-0"
             }`}
           >
+            <div className="h-1 bg-brand-gradient" aria-hidden />
             <CardContent className="p-6">
               <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
                 {question.question}
@@ -616,21 +618,21 @@ interface RatingButtonProps {
 function RatingButton({ label, sublabel, shortcut, onClick, variant }: RatingButtonProps) {
   const variantStyles = {
     again:
-      "hover:bg-red-50 hover:border-red-300 hover:text-red-700 dark:hover:bg-red-950 dark:hover:border-red-900 dark:hover:text-red-400",
-    hard: "hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700 dark:hover:bg-orange-950 dark:hover:border-orange-900 dark:hover:text-orange-400",
-    good: "hover:bg-green-50 hover:border-green-300 hover:text-green-700 dark:hover:bg-green-950 dark:hover:border-green-900 dark:hover:text-green-400",
-    easy: "hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 dark:hover:bg-blue-950 dark:hover:border-blue-900 dark:hover:text-blue-400",
+      "bg-red-500/[.04] border-red-500/25 text-red-700 hover:bg-red-500/15 dark:bg-red-500/[.08] dark:text-red-400 dark:hover:bg-red-500/20",
+    hard: "bg-orange-500/[.04] border-orange-500/25 text-orange-700 hover:bg-orange-500/15 dark:bg-orange-500/[.08] dark:text-orange-400 dark:hover:bg-orange-500/20",
+    good: "bg-green-500/[.04] border-green-500/25 text-green-700 hover:bg-green-500/15 dark:bg-green-500/[.08] dark:text-green-400 dark:hover:bg-green-500/20",
+    easy: "bg-blue-500/[.04] border-blue-500/25 text-blue-700 hover:bg-blue-500/15 dark:bg-blue-500/[.08] dark:text-blue-400 dark:hover:bg-blue-500/20",
   };
 
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center py-3 rounded-md border bg-card transition-colors ${variantStyles[variant]}`}
+      className={`flex flex-col items-center justify-center py-3 rounded-lg border transition-colors ${variantStyles[variant]}`}
     >
       <span className="font-medium text-sm">
         {label} <span className="kbd ml-0.5">{shortcut}</span>
       </span>
-      <span className="text-xs text-muted-foreground mt-0.5">{sublabel}</span>
+      <span className="text-xs opacity-70 mt-0.5 font-mono">{sublabel}</span>
     </button>
   );
 }
@@ -648,13 +650,13 @@ function PracticeButton({
 }) {
   const styles = {
     repeat:
-      "hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700 dark:hover:bg-orange-950 dark:hover:border-orange-900 dark:hover:text-orange-400",
-    next: "hover:bg-green-50 hover:border-green-300 hover:text-green-700 dark:hover:bg-green-950 dark:hover:border-green-900 dark:hover:text-green-400",
+      "bg-orange-500/[.04] border-orange-500/25 text-orange-700 hover:bg-orange-500/15 dark:bg-orange-500/[.08] dark:text-orange-400 dark:hover:bg-orange-500/20",
+    next: "bg-green-500/[.04] border-green-500/25 text-green-700 hover:bg-green-500/15 dark:bg-green-500/[.08] dark:text-green-400 dark:hover:bg-green-500/20",
   };
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 py-3 rounded-md border bg-card transition-colors ${styles[variant]}`}
+      className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition-colors ${styles[variant]}`}
     >
       <span className="font-medium text-sm">{label}</span>
       <span className="kbd">{shortcut}</span>

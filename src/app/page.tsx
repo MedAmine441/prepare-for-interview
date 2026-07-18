@@ -32,16 +32,20 @@ export default async function HomePage() {
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
       {/* Hero */}
-      <section className="text-center mb-16">
-        <h1 className="text-4xl font-bold tracking-tight mb-4">
-          Master Frontend Interviews
+      <section className="relative text-center mb-16 pt-6 pb-2">
+        <div className="absolute -inset-x-8 -top-12 bottom-0 -z-10 bg-dots" aria-hidden />
+        <p className="font-mono text-xs text-primary tracking-widest mb-5">
+          {"<frontmaster />"} — spaced repetition for engineers
+        </p>
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+          Master Frontend <span className="text-gradient">Interviews</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
           Study with spaced repetition flashcards. Practice with AI mock interviews.
           Build real confidence.
         </p>
         <div className="flex gap-3 justify-center">
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="shadow-lg shadow-primary/25">
             <Link href="/flashcards/study">
               <BookOpen className="w-4 h-4 mr-2" />
               {dueTotal > 0 ? `Study Now (${dueTotal} waiting)` : "Start Studying"}
@@ -163,9 +167,9 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <Card>
+    <Card className="transition-shadow hover:shadow-md hover:shadow-primary/5">
       <CardHeader className="pb-2">
-        <div className="w-9 h-9 rounded-md bg-secondary flex items-center justify-center mb-2">
+        <div className="w-9 h-9 rounded-md bg-accent text-accent-foreground flex items-center justify-center mb-2">
           {icon}
         </div>
         <CardTitle className="text-base">{title}</CardTitle>
@@ -193,7 +197,7 @@ function StatCard({
           {icon}
           <span className="text-xs">{label}</span>
         </div>
-        <p className="text-2xl font-semibold">{value}</p>
+        <p className="text-2xl font-semibold font-mono tabular-nums">{value}</p>
       </CardContent>
     </Card>
   );

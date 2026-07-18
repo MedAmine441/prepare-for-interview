@@ -11,6 +11,7 @@ import {
   PenLine,
   RotateCcw,
   Sparkles,
+  Timer,
   XCircle,
 } from "lucide-react";
 import type {
@@ -76,6 +77,22 @@ type EvalState =
 
 const TYPE_MODE_STORAGE_KEY = "fm-type-answers";
 
+/**
+ * Soft answer-time targets per difficulty (seconds). Interviews punish
+ * rambling — the timer turns orange past the target, red past double.
+ */
+const ANSWER_TARGET_SECONDS: Record<Difficulty, number> = {
+  junior: 60,
+  mid: 90,
+  senior: 120,
+};
+
+function formatElapsed(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function FlashcardArena({
   category,
   difficulty,
@@ -97,9 +114,26 @@ export function FlashcardArena({
   const [typedAnswer, setTypedAnswer] = useState("");
   const [evalState, setEvalState] = useState<EvalState | null>(null);
 
+  // Soft answer timer: ticks while the front is showing, freezes on reveal
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [revealedAt, setRevealedAt] = useState<number | null>(null);
+
   useEffect(() => {
     setTypeMode(localStorage.getItem(TYPE_MODE_STORAGE_KEY) === "1");
   }, []);
+
+  useEffect(() => {
+    if (isFlipped || sessionComplete || isLoading) return;
+    setNowTick(Date.now());
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isFlipped, sessionComplete, isLoading]);
+
+  useEffect(() => {
+    if (isFlipped) {
+      setRevealedAt((prev) => prev ?? Date.now());
+    }
+  }, [isFlipped]);
 
   // Review mode state
   const [currentCard, setCurrentCard] = useState<{
@@ -126,6 +160,7 @@ export function FlashcardArena({
     setShowFullAnswer(false);
     setTypedAnswer("");
     setEvalState(null);
+    setRevealedAt(null);
 
     try {
       const [result, stats] = await Promise.all([
@@ -172,6 +207,7 @@ export function FlashcardArena({
     setShowFullAnswer(false);
     setTypedAnswer("");
     setEvalState(null);
+    setRevealedAt(null);
 
     try {
       const result = await getQuestions({
@@ -198,6 +234,7 @@ export function FlashcardArena({
       setDeck(shuffle(cards));
       setDeckIndex(0);
       setCardCount(1);
+      setStartTime(Date.now());
     } catch (err) {
       setError("Failed to load cards. Please try again.");
       console.error(err);
@@ -311,11 +348,13 @@ export function FlashcardArena({
     setShowFullAnswer(false);
     setTypedAnswer("");
     setEvalState(null);
+    setRevealedAt(null);
     if (deckIndex + 1 >= deck.length) {
       setSessionComplete(true);
     } else {
       setDeckIndex((i) => i + 1);
       setCardCount((c) => c + 1);
+      setStartTime(Date.now());
     }
   }, [mode, isFlipped, deckIndex, deck.length]);
 
@@ -325,6 +364,7 @@ export function FlashcardArena({
     setShowFullAnswer(false);
     setTypedAnswer("");
     setEvalState(null);
+    setRevealedAt(null);
     // Move the current card to the end of the deck so it comes back
     setDeck((d) => [
       ...d.slice(0, deckIndex),
@@ -332,6 +372,7 @@ export function FlashcardArena({
       d[deckIndex],
     ]);
     setCardCount((c) => c + 1);
+    setStartTime(Date.now());
   }, [mode, isFlipped, deckIndex]);
 
   const handleRestart = () => {
@@ -491,6 +532,17 @@ export function FlashcardArena({
   if (!question) return null;
 
   const previews = currentCard?.intervalPreviews;
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor(((revealedAt ?? nowTick) - startTime) / 1000),
+  );
+  const targetSeconds = ANSWER_TARGET_SECONDS[question.difficulty];
+  const timerColor =
+    elapsedSeconds > targetSeconds * 2
+      ? "text-red-600 dark:text-red-400"
+      : elapsedSeconds > targetSeconds
+        ? "text-orange-600 dark:text-orange-400"
+        : "text-muted-foreground";
   const activeEval =
     evalState && evalState.questionId === (question.id as string)
       ? evalState
@@ -527,6 +579,13 @@ export function FlashcardArena({
               )}
             </>
           )}
+          <span
+            className={`flex items-center gap-1 font-mono tabular-nums text-xs transition-colors ${timerColor}`}
+            title={`Soft target ${formatElapsed(targetSeconds)} for a ${question.difficulty} question — interviews punish rambling`}
+          >
+            <Timer className="w-3.5 h-3.5" />
+            {formatElapsed(elapsedSeconds)}
+          </span>
         </div>
         <div className="flex items-center gap-3">
           <button

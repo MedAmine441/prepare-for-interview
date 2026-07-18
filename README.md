@@ -8,17 +8,17 @@ A local-first study app for frontend interview preparation:
 - **AI question generation** — grow the bank on demand, in your chosen category and difficulty
 - **~78 curated questions** across 13 categories: JavaScript fundamentals, React patterns & internals, TypeScript, web performance, system design, CSS, security, accessibility, and more
 
-Built with Next.js 15, TypeScript, Tailwind CSS, and a local JSON database (lowdb). Everything runs and stays on your machine.
+Built with Next.js 15, TypeScript, Tailwind CSS, and a local SQLite database (via Node's built-in `node:sqlite` — no native build step). Everything runs and stays on your machine.
 
 ## Quick Start
 
-**Prerequisites:** Node.js 18+
+**Prerequisites:** Node.js 22+ (the database uses Node's built-in SQLite module)
 
 ```bash
 # 1. Install dependencies
 npm install
 
-# 2. Seed the question bank (creates data/db.json)
+# 2. Seed the question bank (creates data/frontmaster.db)
 npm run seed
 
 # 3. Start the app
@@ -63,16 +63,17 @@ Interview → pick topics, difficulty, question source, and count → the AI int
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
-| `npm run seed` | Add seed questions to `data/db.json` (idempotent — existing questions and your progress are kept) |
+| `npm run seed` | Add seed questions to `data/frontmaster.db` (idempotent — existing questions and your progress are kept) |
 | `npm run seed:clear` | Remove seed questions and **all study progress**, then reseed fresh |
 
 ## Your Data
 
-All state lives in `data/db.json` — questions, spaced-repetition progress, and streaks. The file is **gitignored**: it's personal study data, created by `npm run seed` on first setup.
+All state lives in a SQLite database at `data/frontmaster.db` — questions, spaced-repetition progress, and streaks. The file is **gitignored**: it's personal study data, created by `npm run seed` on first setup.
 
 - Re-running `npm run seed` is safe — it only adds missing seed questions.
-- To start completely fresh, delete `data/db.json` and run `npm run seed` again (or use `npm run seed:clear`).
-- Questions you add via the UI ("Add Question" / "Generate with AI") live only in `data/db.json` — back that file up if you want to keep them.
+- To start completely fresh, delete `data/frontmaster.db` (and its `-wal`/`-shm` sidecars) and run `npm run seed` again, or use `npm run seed:clear`.
+- Questions you add via the UI ("Add Question" / "Generate with AI") live only in the database — back up `data/frontmaster.db` if you want to keep them.
+- Inspect it with any SQLite client: `sqlite3 data/frontmaster.db 'SELECT category, COUNT(*) FROM questions GROUP BY category'`.
 
 ### Adding to the question bank
 

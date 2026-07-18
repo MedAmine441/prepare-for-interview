@@ -1,67 +1,127 @@
 // src/lib/db/repositories/progress.repository.ts
 
 import { nanoid } from 'nanoid';
-import { getDatabase, writeDatabase } from '../index';
-import type { 
-  QuestionProgress, 
+import { getDb, getMeta, setMeta, transaction } from '../index';
+import type {
+  QuestionProgress,
   ProgressId,
   QuestionId,
   SM2State,
-  SM2Quality,
   ReviewRecord,
   RecordReviewInput,
   CategoryProgress,
   DueCards,
   QuestionCategory,
 } from '@/types';
-import { createProgressId, DEFAULT_SM2_STATE } from '@/types';
-import { 
-  calculateSM2, 
-  getInitialSM2State, 
+import { createProgressId, createQuestionId, createEaseFactor } from '@/types';
+import {
+  calculateSM2,
+  getInitialSM2State,
   getDueCards as getDueCardsFromSM2,
-  getMasteryLevel 
+  getMasteryLevel,
 } from '@/lib/algorithms/sm2';
 
+interface ProgressRow {
+  id: string;
+  question_id: string;
+  ease_factor: number;
+  sm2_interval: number;
+  repetitions: number;
+  next_review_date: string;
+  last_review_date: string | null;
+  total_reviews: number;
+  correct_reviews: number;
+  average_quality: number;
+  review_history: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToProgress(row: ProgressRow): QuestionProgress {
+  return {
+    id: createProgressId(row.id),
+    questionId: createQuestionId(row.question_id),
+    sm2: {
+      easeFactor: createEaseFactor(row.ease_factor),
+      interval: row.sm2_interval,
+      repetitions: row.repetitions,
+      nextReviewDate: row.next_review_date,
+      lastReviewDate: row.last_review_date,
+    },
+    totalReviews: row.total_reviews,
+    correctReviews: row.correct_reviews,
+    averageQuality: row.average_quality,
+    reviewHistory: JSON.parse(row.review_history),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function writeProgress(progress: QuestionProgress): void {
+  getDb()
+    .prepare(
+      `INSERT INTO progress
+         (id, question_id, ease_factor, sm2_interval, repetitions,
+          next_review_date, last_review_date, total_reviews, correct_reviews,
+          average_quality, review_history, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(question_id) DO UPDATE SET
+         ease_factor = excluded.ease_factor,
+         sm2_interval = excluded.sm2_interval,
+         repetitions = excluded.repetitions,
+         next_review_date = excluded.next_review_date,
+         last_review_date = excluded.last_review_date,
+         total_reviews = excluded.total_reviews,
+         correct_reviews = excluded.correct_reviews,
+         average_quality = excluded.average_quality,
+         review_history = excluded.review_history,
+         updated_at = excluded.updated_at`,
+    )
+    .run(
+      progress.id,
+      progress.questionId,
+      progress.sm2.easeFactor,
+      progress.sm2.interval,
+      progress.sm2.repetitions,
+      progress.sm2.nextReviewDate,
+      progress.sm2.lastReviewDate,
+      progress.totalReviews,
+      progress.correctReviews,
+      progress.averageQuality,
+      JSON.stringify(progress.reviewHistory),
+      progress.createdAt,
+      progress.updatedAt,
+    );
+}
+
 /**
- * Progress Repository
- * Handles all SM-2 spaced repetition progress tracking
+ * Progress Repository — SQLite-backed SM-2 spaced repetition tracking.
  */
 export const progressRepository = {
-  /**
-   * Get all progress records
-   */
   async findAll(): Promise<QuestionProgress[]> {
-    const db = await getDatabase();
-    return db.data.progress;
+    const rows = getDb().prepare('SELECT * FROM progress').all() as unknown as ProgressRow[];
+    return rows.map(rowToProgress);
   },
-  
-  /**
-   * Get progress for a specific question
-   */
+
   async findByQuestionId(questionId: QuestionId): Promise<QuestionProgress | null> {
-    const db = await getDatabase();
-    return db.data.progress.find(p => p.questionId === questionId) ?? null;
+    const row = getDb()
+      .prepare('SELECT * FROM progress WHERE question_id = ?')
+      .get(questionId) as unknown as ProgressRow | undefined;
+    return row ? rowToProgress(row) : null;
   },
-  
-  /**
-   * Get progress by ID
-   */
+
   async findById(id: ProgressId): Promise<QuestionProgress | null> {
-    const db = await getDatabase();
-    return db.data.progress.find(p => p.id === id) ?? null;
+    const row = getDb()
+      .prepare('SELECT * FROM progress WHERE id = ?')
+      .get(id) as unknown as ProgressRow | undefined;
+    return row ? rowToProgress(row) : null;
   },
-  
-  /**
-   * Get or create progress for a question
-   * If progress doesn't exist, creates initial SM-2 state
-   */
+
   async getOrCreate(questionId: QuestionId): Promise<QuestionProgress> {
     const existing = await this.findByQuestionId(questionId);
     if (existing) return existing;
-    
-    const db = await getDatabase();
+
     const now = new Date().toISOString();
-    
     const progress: QuestionProgress = {
       id: createProgressId(nanoid()),
       questionId,
@@ -73,150 +133,100 @@ export const progressRepository = {
       createdAt: now,
       updatedAt: now,
     };
-    
-    db.data.progress.push(progress);
-    await writeDatabase(db);
-    
+
+    writeProgress(progress);
     return progress;
   },
-  
-  /**
-   * Record a review and update SM-2 state
-   */
+
   async recordReview(input: RecordReviewInput): Promise<QuestionProgress> {
-    const db = await getDatabase();
-    
-    // Get or create progress
-    let progress = await this.getOrCreate(input.questionId);
-    const progressIndex = db.data.progress.findIndex(p => p.id === progress.id);
-    
-    // Calculate new SM-2 state
+    const progress = await this.getOrCreate(input.questionId);
+
     const { newState } = calculateSM2(progress.sm2, input.quality);
-    
-    // Create review record
+
     const review: ReviewRecord = {
       date: new Date().toISOString(),
       quality: input.quality,
       responseTimeMs: input.responseTimeMs,
       wasRevealed: input.wasRevealed,
     };
-    
-    // Update statistics
+
     const newTotalReviews = progress.totalReviews + 1;
     const isCorrect = input.quality >= 3;
-    const newCorrectReviews = progress.correctReviews + (isCorrect ? 1 : 0);
-    const newAverageQuality = (
-      (progress.averageQuality * progress.totalReviews + input.quality) / 
-      newTotalReviews
-    );
-    
-    // Keep last 50 reviews in history
-    const newHistory = [...progress.reviewHistory, review].slice(-50);
-    
-    // Update progress
     const updated: QuestionProgress = {
       ...progress,
       sm2: newState,
       totalReviews: newTotalReviews,
-      correctReviews: newCorrectReviews,
-      averageQuality: newAverageQuality,
-      reviewHistory: newHistory,
+      correctReviews: progress.correctReviews + (isCorrect ? 1 : 0),
+      averageQuality:
+        (progress.averageQuality * progress.totalReviews + input.quality) /
+        newTotalReviews,
+      // Keep last 50 reviews in history
+      reviewHistory: [...progress.reviewHistory, review].slice(-50),
       updatedAt: new Date().toISOString(),
     };
-    
-    db.data.progress[progressIndex] = updated;
-    
-    // Update study streak in metadata
-    await this.updateStudyStreak(db);
-    
-    await writeDatabase(db);
-    
+
+    transaction(() => {
+      writeProgress(updated);
+      this.updateStudyStreakSync();
+    });
+
     return updated;
   },
-  
+
   /**
-   * Update study streak based on today's activity
+   * Update the study streak based on today's activity.
+   * Synchronous — called inside the recordReview transaction.
    */
-  async updateStudyStreak(db: Awaited<ReturnType<typeof getDatabase>>): Promise<void> {
+  updateStudyStreakSync(): void {
     const today = new Date().toISOString().split('T')[0];
-    const lastStudy = db.data.metadata.lastStudyDate;
-    
-    if (lastStudy === today) {
-      // Already studied today, no change
-      return;
-    }
-    
+    const lastStudy = getMeta<string | null>('lastStudyDate', null);
+
+    if (lastStudy === today) return;
+
+    let streak = getMeta<number>('studyStreak', 0);
     if (lastStudy) {
-      const lastDate = new Date(lastStudy);
-      const todayDate = new Date(today);
       const diffDays = Math.floor(
-        (todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
+        (new Date(today).getTime() - new Date(lastStudy).getTime()) /
+          (1000 * 60 * 60 * 24),
       );
-      
-      if (diffDays === 1) {
-        // Consecutive day - increment streak
-        db.data.metadata.studyStreak += 1;
-      } else if (diffDays > 1) {
-        // Streak broken - reset to 1
-        db.data.metadata.studyStreak = 1;
-      }
+      streak = diffDays === 1 ? streak + 1 : 1;
     } else {
-      // First study ever
-      db.data.metadata.studyStreak = 1;
+      streak = 1;
     }
-    
-    db.data.metadata.lastStudyDate = today;
+
+    setMeta('studyStreak', streak);
+    setMeta('lastStudyDate', today);
   },
-  
-  /**
-   * Get cards due for review
-   */
+
   async getDueCards(): Promise<DueCards> {
     const progress = await this.findAll();
-    
-    const records = progress.map(p => ({
-      id: p.questionId,
-      sm2: p.sm2,
-    }));
-    
-    return getDueCardsFromSM2(records);
+    return getDueCardsFromSM2(progress.map((p) => ({ id: p.questionId, sm2: p.sm2 })));
   },
-  
-  /**
-   * Get progress statistics by category
-   */
+
   async getCategoryProgress(
-    questionsByCategory: Record<QuestionCategory, QuestionId[]>
+    questionsByCategory: Record<QuestionCategory, QuestionId[]>,
   ): Promise<CategoryProgress[]> {
     const progress = await this.findAll();
-    const progressByQuestion = new Map(progress.map(p => [p.questionId, p]));
-    
+    const progressByQuestion = new Map(progress.map((p) => [p.questionId, p]));
+
     const result: CategoryProgress[] = [];
-    
+
     for (const [category, questionIds] of Object.entries(questionsByCategory)) {
       let studiedCount = 0;
       let masteredCount = 0;
       let totalEaseFactor = 0;
       let dueCount = 0;
-      
+
       for (const qId of questionIds) {
         const qProgress = progressByQuestion.get(qId as QuestionId);
-        
-        if (qProgress) {
-          studiedCount++;
-          totalEaseFactor += qProgress.sm2.easeFactor;
-          
-          if (getMasteryLevel(qProgress.sm2) === 'mastered') {
-            masteredCount++;
-          }
-          
-          const nextReview = new Date(qProgress.sm2.nextReviewDate);
-          if (nextReview <= new Date()) {
-            dueCount++;
-          }
-        }
+        if (!qProgress) continue;
+
+        studiedCount++;
+        totalEaseFactor += qProgress.sm2.easeFactor;
+        if (getMasteryLevel(qProgress.sm2) === 'mastered') masteredCount++;
+        if (new Date(qProgress.sm2.nextReviewDate) <= new Date()) dueCount++;
       }
-      
+
       result.push({
         category: category as QuestionCategory,
         totalQuestions: questionIds.length,
@@ -226,13 +236,10 @@ export const progressRepository = {
         dueCount,
       });
     }
-    
+
     return result;
   },
-  
-  /**
-   * Get overall progress dashboard data
-   */
+
   async getDashboard(): Promise<{
     totalStudied: number;
     totalMastered: number;
@@ -241,69 +248,52 @@ export const progressRepository = {
     dueCards: DueCards;
     recentReviews: ReviewRecord[];
   }> {
-    const db = await getDatabase();
     const progress = await this.findAll();
     const dueCards = await this.getDueCards();
-    
+
     let masteredCount = 0;
-    const allReviews: Array<ReviewRecord & { questionId: QuestionId }> = [];
-    
+    const allReviews: ReviewRecord[] = [];
+
     for (const p of progress) {
-      if (getMasteryLevel(p.sm2) === 'mastered') {
-        masteredCount++;
-      }
-      
-      for (const review of p.reviewHistory) {
-        allReviews.push({ ...review, questionId: p.questionId });
-      }
+      if (getMasteryLevel(p.sm2) === 'mastered') masteredCount++;
+      allReviews.push(...p.reviewHistory);
     }
-    
-    // Sort reviews by date descending and take last 20
+
     const recentReviews = allReviews
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 20);
-    
+
     return {
       totalStudied: progress.length,
       totalMastered: masteredCount,
-      streakDays: db.data.metadata.studyStreak,
-      lastStudyDate: db.data.metadata.lastStudyDate,
+      streakDays: getMeta<number>('studyStreak', 0),
+      lastStudyDate: getMeta<string | null>('lastStudyDate', null),
       dueCards,
       recentReviews,
     };
   },
-  
-  /**
-   * Reset progress for a specific question
-   */
+
   async reset(questionId: QuestionId): Promise<boolean> {
-    const db = await getDatabase();
-    const index = db.data.progress.findIndex(p => p.questionId === questionId);
-    
-    if (index === -1) return false;
-    
-    db.data.progress[index] = {
-      ...db.data.progress[index],
+    const existing = await this.findByQuestionId(questionId);
+    if (!existing) return false;
+
+    writeProgress({
+      ...existing,
       sm2: getInitialSM2State(),
       totalReviews: 0,
       correctReviews: 0,
       averageQuality: 0,
       reviewHistory: [],
       updatedAt: new Date().toISOString(),
-    };
-    
-    await writeDatabase(db);
+    });
     return true;
   },
-  
-  /**
-   * Delete all progress (for testing/reset)
-   */
+
   async deleteAll(): Promise<void> {
-    const db = await getDatabase();
-    db.data.progress = [];
-    db.data.metadata.studyStreak = 0;
-    db.data.metadata.lastStudyDate = null;
-    await writeDatabase(db);
+    transaction(() => {
+      getDb().exec('DELETE FROM progress');
+      setMeta('studyStreak', 0);
+      setMeta('lastStudyDate', null);
+    });
   },
 };

@@ -1,82 +1,17 @@
 // scripts/seed.ts
 
 /**
- * Database Seeding Script
+ * Database Seeding Script (SQLite)
  *
- * Run with: npx tsx scripts/seed.ts
+ * Run with: npm run seed          — add missing seed questions (idempotent)
+ *           npm run seed:clear    — remove seed questions + ALL progress, reseed
  *
- * This script:
- * 1. Clears existing questions (optional)
- * 2. Seeds the database with high-quality interview questions
- * 3. Creates initial progress records
+ * Seed question ids are positional per category (e.g. css-layout-003),
+ * so append new seed questions at the end of their category arrays.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
-import { join } from "path";
 import { ALL_SEED_QUESTIONS } from "../data/seed-data";
-import type { Question, QuestionProgress } from "../src/types";
-import {
-  createQuestionId,
-  createProgressId,
-  createEaseFactor,
-} from "../src/types";
-import { nanoid } from "nanoid";
-
-// Database file path
-const DB_PATH = join(process.cwd(), "data", "db.json");
-
-interface DatabaseSchema {
-  questions: Question[];
-  progress: QuestionProgress[];
-  sessions: unknown[];
-  metadata: {
-    version: number;
-    createdAt: string;
-    updatedAt: string;
-    totalStudySessions: number;
-    totalInterviewSessions: number;
-    studyStreak: number;
-    lastStudyDate: string | null;
-  };
-}
-
-const defaultData: DatabaseSchema = {
-  questions: [],
-  progress: [],
-  sessions: [],
-  metadata: {
-    version: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    totalStudySessions: 0,
-    totalInterviewSessions: 0,
-    studyStreak: 0,
-    lastStudyDate: null,
-  },
-};
-
-function loadDatabase(): DatabaseSchema {
-  if (!existsSync(DB_PATH)) {
-    return { ...defaultData };
-  }
-
-  try {
-    const content = readFileSync(DB_PATH, "utf-8");
-    return JSON.parse(content) as DatabaseSchema;
-  } catch {
-    console.warn("Could not parse existing database, starting fresh");
-    return { ...defaultData };
-  }
-}
-
-function saveDatabase(data: DatabaseSchema): void {
-  const dir = join(process.cwd(), "data");
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
+import { getDb, setMeta } from "../src/lib/db";
 
 function generateQuestionId(category: string, index: number): string {
   return `${category}-${String(index).padStart(3, "0")}`;
@@ -85,103 +20,102 @@ function generateQuestionId(category: string, index: number): string {
 async function seed(options: { clearExisting?: boolean } = {}) {
   console.log("🌱 Starting database seeding...\n");
 
-  const db = loadDatabase();
+  const db = getDb();
 
   if (options.clearExisting) {
-    console.log("🗑️  Clearing existing seed questions...");
-    db.questions = db.questions.filter((q) => q.source !== "seed");
-    db.progress = [];
+    console.log("🗑️  Clearing existing seed questions and all progress...");
+    db.exec("BEGIN");
+    try {
+      db.prepare("DELETE FROM questions WHERE source = 'seed'").run();
+      db.exec("DELETE FROM progress");
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    setMeta("studyStreak", 0);
+    setMeta("lastStudyDate", null);
   }
 
-  // Track questions by category for ID generation
-  const categoryCounters: Record<string, number> = {};
-
-  // Get existing seed question IDs to avoid duplicates
-  const existingIds = new Set(
-    db.questions.filter((q) => q.source === "seed").map((q) => q.id)
+  const insertQuestion = db.prepare(
+    `INSERT OR IGNORE INTO questions
+       (id, category, difficulty, question, answer, key_points,
+        follow_up_questions, related_topics, source, common_at,
+        created_at, updated_at, is_archived)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  );
+  const insertProgress = db.prepare(
+    `INSERT OR IGNORE INTO progress
+       (id, question_id, ease_factor, sm2_interval, repetitions,
+        next_review_date, last_review_date, total_reviews, correct_reviews,
+        average_quality, review_history, created_at, updated_at)
+     VALUES (?, ?, 2.5, 0, 0, ?, NULL, 0, 0, 0, '[]', ?, ?)`,
   );
 
+  const categoryCounters: Record<string, number> = {};
+  const now = new Date().toISOString();
   let addedCount = 0;
   let skippedCount = 0;
 
-  const now = new Date().toISOString();
+  db.exec("BEGIN");
+  try {
+    for (const input of ALL_SEED_QUESTIONS) {
+      const category = input.category;
+      categoryCounters[category] = (categoryCounters[category] || 0) + 1;
+      const questionId = generateQuestionId(category, categoryCounters[category]);
 
-  for (const questionInput of ALL_SEED_QUESTIONS) {
-    // Generate ID based on category
-    const category = questionInput.category;
-    categoryCounters[category] = (categoryCounters[category] || 0) + 1;
-    const questionId = createQuestionId(
-      generateQuestionId(category, categoryCounters[category])
-    );
+      const result = insertQuestion.run(
+        questionId,
+        input.category,
+        input.difficulty,
+        input.question,
+        input.answer,
+        JSON.stringify(input.keyPoints),
+        JSON.stringify(input.followUpQuestions),
+        JSON.stringify(input.relatedTopics),
+        input.source,
+        input.commonAt ? JSON.stringify(input.commonAt) : null,
+        now,
+        now,
+      );
 
-    // Skip if already exists
-    if (existingIds.has(questionId)) {
-      skippedCount++;
-      continue;
+      if (result.changes > 0) {
+        insertProgress.run(`progress-${questionId}`, questionId, now, now, now);
+        addedCount++;
+      } else {
+        skippedCount++;
+      }
     }
-
-    // Create full question object
-    const question: Question = {
-      id: questionId,
-      ...questionInput,
-      createdAt: now,
-      updatedAt: now,
-      isArchived: false,
-    };
-
-    db.questions.push(question);
-
-    // Create initial progress record
-    const progress: QuestionProgress = {
-      id: createProgressId(`progress-${questionId}`),
-      questionId: questionId,
-      sm2: {
-        easeFactor: createEaseFactor(2.5),
-        interval: 0,
-        repetitions: 0,
-        nextReviewDate: now,
-        lastReviewDate: null,
-      },
-      totalReviews: 0,
-      correctReviews: 0,
-      averageQuality: 0,
-      reviewHistory: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    db.progress.push(progress);
-    addedCount++;
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
   }
 
-  // Update metadata
-  db.metadata.updatedAt = now;
-  db.metadata.totalStudySessions = 0;
+  setMeta("updatedAt", now);
 
-  // Save to disk
-  saveDatabase(db);
+  const total = (
+    db.prepare("SELECT COUNT(*) AS n FROM questions").get() as { n: number }
+  ).n;
+  const progressTotal = (
+    db.prepare("SELECT COUNT(*) AS n FROM progress").get() as { n: number }
+  ).n;
 
-  // Print summary
   console.log("✅ Seeding complete!\n");
   console.log("📊 Summary:");
   console.log(`   • Questions added: ${addedCount}`);
   console.log(`   • Questions skipped (already exist): ${skippedCount}`);
-  console.log(`   • Total questions in database: ${db.questions.length}`);
-  console.log(`   • Progress records: ${db.progress.length}`);
-  console.log(`\n📁 Database saved to: ${DB_PATH}`);
+  console.log(`   • Total questions in database: ${total}`);
+  console.log(`   • Progress records: ${progressTotal}`);
+  console.log(`\n📁 Database: data/frontmaster.db`);
 
-  // Print category breakdown
   console.log("\n📚 Questions by category:");
-  const categoryCounts: Record<string, number> = {};
-  for (const q of db.questions) {
-    categoryCounts[q.category] = (categoryCounts[q.category] || 0) + 1;
-  }
-
-  Object.entries(categoryCounts)
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([category, count]) => {
-      console.log(`   • ${category}: ${count}`);
-    });
+  const rows = db
+    .prepare(
+      "SELECT category, COUNT(*) AS n FROM questions GROUP BY category ORDER BY n DESC",
+    )
+    .all() as unknown as Array<{ category: string; n: number }>;
+  rows.forEach(({ category, n }) => console.log(`   • ${category}: ${n}`));
 }
 
 // Run the seed script

@@ -3,6 +3,9 @@ node_modules
 .env.local
 
 # Local database — created by `npm run seed`, holds personal study progress
+data/frontmaster.db
+data/frontmaster.db-wal
+data/frontmaster.db-shm
 data/db.json
 
 prompt.txt

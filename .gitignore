@@ -2,6 +2,9 @@ node_modules
 .next
 .env.local
 
+# Local database — created by `npm run seed`, holds personal study progress
+data/db.json
+
 prompt.txt
 todo.txt
 temp_auto_push.bat

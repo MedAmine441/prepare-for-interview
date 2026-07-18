@@ -3,10 +3,13 @@
 A local-first study app for frontend interview preparation:
 
 - **Flashcards with spaced repetition** — SM-2 (Anki-style) scheduling with Again / Hard / Good / Easy ratings
+- **Type-your-answer mode** — answer from memory before revealing; AI grades your answer against the key points and suggests a rating
 - **Practice (cram) mode** — flip through every card in a topic, shuffled, without touching your review schedule
-- **AI mock interviews** — a conversational interviewer that asks questions from the bank, grades your answers against key points, and gives you a final debrief
+- **AI mock interviews** — a conversational interviewer that asks questions from the bank, grades your answers against key points, and gives you a final debrief — with an optional **voice mode** (hear the questions, answer by speaking)
+- **The interview feeds your studying** — ending an interview analyzes the transcript, marks the questions you struggled with as due reviews, and offers a one-click cram session over exactly those cards; every session's transcript and debrief stay browsable under Past Sessions
+- **Interview-date countdown** — set your real interview date and the home page turns your backlog into a daily plan
 - **AI question generation** — grow the bank on demand, in your chosen category and difficulty
-- **~78 curated questions** across 13 categories: JavaScript fundamentals, React patterns & internals, TypeScript, web performance, system design, CSS, security, accessibility, and more
+- **~96 curated questions** across 15 categories: JavaScript fundamentals, React patterns & internals, TypeScript, web performance, system design, CSS, security, accessibility, testing, behavioral/STAR stories, and more
 
 Built with Next.js 15, TypeScript, Tailwind CSS, and a local SQLite database (via Node's built-in `node:sqlite` — no native build step). Everything runs and stays on your machine.
 
@@ -40,7 +43,9 @@ cp .env.example .env.local
 
 - **Review due** (default) — spaced repetition. Rate each card honestly; the SM-2 algorithm schedules the next review (the real intervals are shown on the rating buttons). Cards you fail come back sooner; cards you know drift out to weeks.
 - **Practice all** — cramming before an interview. Every matching card, shuffled, schedule untouched. "Repeat later" sends a card to the back of the deck.
+- **Type answers** (toggle in the study header) — type your answer from memory before revealing. The AI checks it against each key point (✓ covered / ✗ missed) and highlights a suggested rating. Honest self-rating without the overconfidence.
 - The card back shows a concise **Quick Answer** (the key points); expand **Show full answer** for the deep dive.
+- A **soft timer** on each card turns orange past the difficulty's target answer time (60/90/120s) — interviews punish rambling.
 
 ### Keyboard shortcuts
 
@@ -56,6 +61,11 @@ cp .env.example .env.local
 
 Interview → pick topics, difficulty, question source, and count → the AI interviewer works through real questions from your bank, one at a time, and evaluates answers against each question's key points. End the session with the flag button to get a debrief: strengths, gaps, and what to study next.
 
+- **The loop closes automatically**: on ending, the transcript is analyzed per question — weak answers become due flashcards, and a "Cram Weak Spots Now" button drills exactly those cards.
+- **Voice mode** (speaker toggle in the chat): the interviewer's questions are read aloud and the mic transcribes your spoken answers — closest thing to the real room. Chrome only.
+- **Past Sessions** keeps every finished interview: per-question verdicts, the debrief, and the full transcript.
+- Include the **Behavioral & Stories** category and the interviewer coaches STAR structure and calls out rambling.
+
 ## Scripts
 
 | Command | What it does |
@@ -63,12 +73,13 @@ Interview → pick topics, difficulty, question source, and count → the AI int
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
+| `npm test` | Run the vitest suite (SM-2 algorithm + repositories, against a throwaway db) |
 | `npm run seed` | Add seed questions to `data/frontmaster.db` (idempotent — existing questions and your progress are kept) |
 | `npm run seed:clear` | Remove seed questions and **all study progress**, then reseed fresh |
 
 ## Your Data
 
-All state lives in a SQLite database at `data/frontmaster.db` — questions, spaced-repetition progress, and streaks. The file is **gitignored**: it's personal study data, created by `npm run seed` on first setup.
+All state lives in a SQLite database at `data/frontmaster.db` — questions, spaced-repetition progress, streaks, and interview sessions. The file is **gitignored**: it's personal study data, created by `npm run seed` on first setup.
 
 - Re-running `npm run seed` is safe — it only adds missing seed questions.
 - To start completely fresh, delete `data/frontmaster.db` (and its `-wal`/`-shm` sidecars) and run `npm run seed` again, or use `npm run seed:clear`.

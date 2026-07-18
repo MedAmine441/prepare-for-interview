@@ -1,6 +1,7 @@
 node_modules
 .next
 .env.local
+tsconfig.tsbuildinfo
 
 # Local database — created by `npm run seed`, holds personal study progress
 data/frontmaster.db

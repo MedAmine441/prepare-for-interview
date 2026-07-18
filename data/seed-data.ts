@@ -32,8 +32,14 @@ import { cssLayoutQuestions } from "./css-layout-questions";
 import { jsEventLoopQuestions } from "./js-eventloop-questions";
 import { accessibilityQuestions } from "./accessibility-questions";
 import { reactInternalsQuestions } from "./react-internals-questions";
+import { jsFundamentalsQuestions } from "./js-fundamentals-questions";
+import { reactPatternsQuestions } from "./react-patterns-questions";
+import { typescriptQuestions } from "./typescript-questions";
+import { webPerformanceQuestions } from "./web-performance-questions";
 
-// Export all questions combined
+// Export all questions combined.
+// NOTE: seed ids are per-category counters over this array's order —
+// append new questions after existing ones so ids stay stable.
 export const ALL_SEED_QUESTIONS: CreateQuestionInput[] = [
   ...featureFlagsQuestions,
   ...systemDesignQuestions,
@@ -44,6 +50,10 @@ export const ALL_SEED_QUESTIONS: CreateQuestionInput[] = [
   ...jsEventLoopQuestions,
   ...accessibilityQuestions,
   ...reactInternalsQuestions,
+  ...jsFundamentalsQuestions,
+  ...reactPatternsQuestions,
+  ...typescriptQuestions,
+  ...webPerformanceQuestions,
 ];
 
 // Export individual categories for selective seeding
@@ -57,4 +67,8 @@ export {
   jsEventLoopQuestions,
   accessibilityQuestions,
   reactInternalsQuestions,
+  jsFundamentalsQuestions,
+  reactPatternsQuestions,
+  typescriptQuestions,
+  webPerformanceQuestions,
 };

@@ -311,4 +311,93 @@ Senior devs know automated tools (axe-core, Lighthouse) only catch ~30% of issue
     source: "seed",
     commonAt: ["Senior/Lead Frontend Roles"],
   },
+  {
+    category: QUESTION_CATEGORIES.ACCESSIBILITY,
+    difficulty: "mid",
+    question:
+      "Focus management in SPAs: route changes, modals, and deleted elements. What breaks and how do you fix it?",
+    answer: `## Why SPAs break focus
+
+Native page loads reset focus to the top and announce the new page. SPA route changes just mutate the DOM — focus stays on a link that may no longer exist, screen readers announce **nothing**, and keyboard users are stranded.
+
+## Route changes
+
+On navigation, move focus deliberately: to the new page's \`<h1 tabindex="-1">\` (announces context) or to a skip-target/main region. Some router libraries handle it; verify with a screen reader, don't assume. Announce async page titles with \`document.title\` + optionally a live region.
+
+## Modals/dialogs — the full contract
+
+1. On open: move focus **into** the dialog (first focusable or the dialog itself).
+2. **Trap focus** while open: Tab cycles inside only.
+3. Escape closes; clicking the backdrop closes (usually).
+4. On close: **return focus to the trigger** — the most-forgotten step.
+5. Background is inert: \`aria-hidden\` on siblings or better, the \`inert\` attribute.
+
+The native \`<dialog>\` element with \`showModal()\` gives you focus trap, Escape, and top-layer for free — the modern answer; libraries (Radix, React Aria) implement the same contract when you need more control.
+
+## Deleted/moved elements
+
+If focus is on a list item you delete, focus falls to \`<body>\` — silent limbo. Before removal, move focus to the next item, previous item, or the list container. Same for tabs being closed, rows removed, toasts dismissed via keyboard.
+
+Test protocol: unplug the mouse; every flow must be completable and *trackable* by Tab/Shift-Tab/Arrows, with visible \`:focus-visible\` styling throughout.`,
+    keyPoints: [
+      "Route changes must move focus (h1 tabindex=-1) — SPAs don't do it natively",
+      "Dialog contract: focus in, trap, Escape, focus back to trigger, inert background",
+      "Native <dialog>/inert now provide most of this for free",
+      "Before deleting a focused element, relocate focus deliberately",
+    ],
+    followUpQuestions: [
+      "How does focus-visible differ from focus, and why does it matter?",
+      "How would you test focus management in CI?",
+    ],
+    relatedTopics: ["keyboard-navigation", "dialogs", "spa-routing"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.ACCESSIBILITY,
+    difficulty: "mid",
+    question:
+      "Build an accessible form: labels, error handling, and announcing async results with live regions.",
+    answer: `## Labels — the non-negotiables
+
+Every control needs a **programmatic** label: \`<label for>\` / wrapping label, or \`aria-label\`/\`aria-labelledby\` when visual design forbids visible text. Placeholder is **not** a label (disappears on input, low contrast, not reliably announced). Group related controls: \`<fieldset><legend>\` for radio groups and address blocks. Use the right input types (\`email\`, \`tel\`) and \`autocomplete\` attributes — they aid everyone.
+
+## Validation and errors
+
+\`\`\`html
+<label for="email">Email</label>
+<input id="email" type="email" aria-describedby="email-err" aria-invalid="true" />
+<p id="email-err">Enter a valid email address.</p>
+\`\`\`
+
+- Tie the message to the field with \`aria-describedby\` (read after the label) + \`aria-invalid\`.
+- Error text must be **specific and visible** — not color alone (WCAG: color can't be the only signal).
+- On submit failure: move focus to the first invalid field, or to an error summary at the top that links to each field.
+- Validate on blur/submit, not aggressively on every keystroke.
+
+## Announcing async results — live regions
+
+Screen readers don't watch the DOM; **live regions** are how dynamic changes get spoken:
+
+\`\`\`html
+<div aria-live="polite" class="sr-only" id="status"></div>
+<!-- after async save: statusEl.textContent = "Changes saved" -->
+\`\`\`
+
+- \`polite\` (or \`role="status"\`) for success/info; \`assertive\` (\`role="alert"\`) only for urgent errors.
+- The region must **exist in the DOM before** the update — injecting a live region together with its message often announces nothing.
+- Use for: form submission results, "searching…/N results" states, toast notifications, cart updates.`,
+    keyPoints: [
+      "Programmatic labels always; placeholder is not a label",
+      "aria-describedby + aria-invalid wire errors to fields",
+      "On failure, focus the first error or a linked error summary",
+      "Live regions announce async changes — must pre-exist in the DOM",
+      "polite for status, assertive only for urgent alerts",
+    ],
+    followUpQuestions: [
+      "When does aria-errormessage differ from aria-describedby?",
+      "How do you make a toast system accessible?",
+    ],
+    relatedTopics: ["forms", "aria", "screen-readers", "wcag"],
+    source: "seed",
+  },
 ];

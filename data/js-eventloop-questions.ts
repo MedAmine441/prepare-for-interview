@@ -218,4 +218,104 @@ Using standard \`Map\` or \`Set\` to associate data with DOM elements creates st
     source: "seed",
     commonAt: ["Performance Optimization Roles", "Large Scale SPAs"],
   },
+  {
+    category: QUESTION_CATEGORIES.JS_EVENT_LOOP,
+    difficulty: "mid",
+    question:
+      "Predict the output: setTimeout, Promise.then, queueMicrotask, and async/await ordering — and explain WHY.",
+    answer: `## The puzzle
+
+\`\`\`javascript
+console.log("1: sync");
+
+setTimeout(() => console.log("2: timeout"), 0);
+
+Promise.resolve().then(() => console.log("3: promise"));
+
+queueMicrotask(() => console.log("4: microtask"));
+
+(async () => {
+  console.log("5: async start");
+  await null;
+  console.log("6: after await");
+})();
+
+console.log("7: sync end");
+\`\`\`
+
+**Output: 1, 5, 7, 3, 4, 6, 2**
+
+## Why, step by step
+
+1. **Synchronous code runs to completion first**: \`1\`, then the async IIFE starts executing synchronously until its first \`await\` → \`5\`, then \`await null\` suspends it (the continuation is queued as a **microtask**), then \`7\`.
+2. **Microtask queue drains completely** before anything else: \`3\` (queued first), \`4\`, \`6\` — FIFO order of when each microtask was enqueued.
+3. Only then does the event loop take the next **macrotask**: \`2\`.
+
+## The rules to state
+
+- Each macrotask (script, timeout, event) runs to completion; then the **entire** microtask queue drains — including microtasks queued *by* microtasks — before rendering or the next macrotask.
+- \`await x\` = "run the rest as a microtask after x settles"; even \`await\` of a plain value yields once.
+- \`setTimeout(fn, 0)\` means "next macrotask, at the earliest" — also subject to clamping/throttling.
+- Practical consequence: a microtask loop can starve rendering; long chains of promise reactions block paint just like sync code.`,
+    keyPoints: [
+      "Sync runs to completion; async fn runs sync until first await",
+      "Entire microtask queue drains before the next macrotask or paint",
+      "await queues the continuation as a microtask, even for plain values",
+      "setTimeout 0 = next macrotask at earliest; microtask loops starve rendering",
+    ],
+    followUpQuestions: [
+      "Where do MutationObserver callbacks and requestAnimationFrame fit?",
+      "What changes in Node.js with process.nextTick and setImmediate?",
+    ],
+    relatedTopics: ["promises", "async-await", "rendering"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.JS_EVENT_LOOP,
+    difficulty: "mid",
+    question:
+      "Web Workers: what can they do, what are their limits, and when are they the right tool in a frontend app?",
+    answer: `## What they are
+
+Separate JS threads with **their own event loop and memory** — true parallelism for computation. The main thread stays free to handle input and rendering while a worker crunches.
+
+\`\`\`javascript
+// main
+const worker = new Worker(new URL("./parse.worker.js", import.meta.url));
+worker.postMessage(rawData);
+worker.onmessage = (e) => setRows(e.data);
+
+// parse.worker.js
+onmessage = (e) => postMessage(heavyParse(e.data));
+\`\`\`
+
+## The constraints
+
+- **No DOM, window, or document** — workers compute, they don't render.
+- Communication is **message passing**; payloads are **structured-cloned** (copied). Big payloads make the copy itself a main-thread cost — mitigate with **Transferables** (ArrayBuffer ownership moves, zero-copy) or \`SharedArrayBuffer\` (shared memory, needs cross-origin isolation headers).
+- Async by nature — request/response wrappers (Comlink turns workers into async proxies) tame the ergonomics.
+
+## Right use cases
+
+CSV/JSON parsing of large payloads, client-side search indexing (Fuse/lunr), image/video processing, compression, crypto, diffing large datasets, spreadsheet-style recalculation — anything CPU-bound and DOM-free that causes long tasks/poor INP.
+
+## Wrong use cases
+
+DOM-heavy work (can't), typical app logic (messaging overhead > gain), fixing renders that are slow because of React misuse — fix the rendering first.
+
+Also name the family: **Service Workers** (network proxy/offline — different job) and **Worklets** (paint/audio) are cousins, not substitutes.`,
+    keyPoints: [
+      "Separate thread + event loop: parallel CPU work, main thread stays responsive",
+      "No DOM access; structured-clone messaging is the tax",
+      "Transferables/SharedArrayBuffer avoid copy costs for big data",
+      "Use for CPU-bound, DOM-free work causing long tasks — not app logic",
+      "Service Workers solve networking/offline, a different problem",
+    ],
+    followUpQuestions: [
+      "How does Comlink improve the worker developer experience?",
+      "What headers enable SharedArrayBuffer and why?",
+    ],
+    relatedTopics: ["long-tasks", "inp", "parallelism", "service-workers"],
+    source: "seed",
+  },
 ];

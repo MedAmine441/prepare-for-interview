@@ -10,6 +10,8 @@ import { SearchInput } from "@/components/shared/SearchInput";
 import { CategoryFilter } from "@/components/shared/CategoryFilter";
 import { DifficultyFilter } from "@/components/shared/DifficultyFilter";
 import { getQuestions } from "@/actions/question.actions";
+import { getQuestionStatusMap, type StudyStatus } from "@/actions/flashcard.actions";
+import { GeneratePanel } from "@/components/questions/GeneratePanel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +46,7 @@ function QuestionsPageContent() {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
+  const [statusMap, setStatusMap] = useState<Record<string, StudyStatus>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +101,10 @@ function QuestionsPageContent() {
     setError(null);
 
     try {
-      const result = await getQuestions();
+      const [result, statuses] = await Promise.all([
+        getQuestions(),
+        getQuestionStatusMap(),
+      ]);
 
       if (!result.success) {
         setError(result.error);
@@ -107,6 +113,9 @@ function QuestionsPageContent() {
 
       setQuestions(result.data);
       setFilteredQuestions(result.data);
+      if (statuses.success) {
+        setStatusMap(statuses.data);
+      }
     } catch (err) {
       setError("Failed to load questions");
       console.error(err);
@@ -131,6 +140,11 @@ function QuestionsPageContent() {
             Add Question
           </Link>
         </Button>
+      </div>
+
+      {/* AI generation */}
+      <div className="mb-6">
+        <GeneratePanel onGenerated={loadQuestions} />
       </div>
 
       {/* Filters */}
@@ -200,7 +214,11 @@ function QuestionsPageContent() {
       ) : (
         <div className="space-y-2">
           {filteredQuestions.map((question) => (
-            <QuestionRow key={question.id} question={question} />
+            <QuestionRow
+              key={question.id}
+              question={question}
+              status={statusMap[question.id] ?? "new"}
+            />
           ))}
         </div>
       )}
@@ -208,7 +226,23 @@ function QuestionsPageContent() {
   );
 }
 
-function QuestionRow({ question }: { question: Question }) {
+const STATUS_STYLES: Record<StudyStatus, { label: string; className: string }> = {
+  new: { label: "New", className: "text-muted-foreground border-border" },
+  due: {
+    label: "Due",
+    className: "text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-900",
+  },
+  learning: {
+    label: "Learning",
+    className: "text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-900",
+  },
+  mastered: {
+    label: "Mastered",
+    className: "text-green-600 border-green-300 dark:text-green-400 dark:border-green-900",
+  },
+};
+
+function QuestionRow({ question, status }: { question: Question; status: StudyStatus }) {
   return (
     <Link href={`/questions/${question.id}`} className="block group">
       <Card className="transition-colors hover:bg-secondary/50">
@@ -228,6 +262,17 @@ function QuestionRow({ question }: { question: Question }) {
                 >
                   {question.difficulty}
                 </Badge>
+                <Badge
+                  variant="outline"
+                  className={`text-xs font-normal ${STATUS_STYLES[status].className}`}
+                >
+                  {STATUS_STYLES[status].label}
+                </Badge>
+                {question.source === "ai-generated" && (
+                  <Badge variant="outline" className="text-xs font-normal text-purple-600 border-purple-300 dark:text-purple-400 dark:border-purple-900">
+                    AI
+                  </Badge>
+                )}
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="w-3 h-3" />
                   {getEstimatedTime(question.difficulty)}m

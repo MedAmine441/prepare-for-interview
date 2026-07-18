@@ -328,6 +328,39 @@ export async function getFlashcardsOverview(): Promise<
 }
 
 /**
+ * Study status per question, for library list chips.
+ * Questions absent from the map have never been studied ("new").
+ */
+export type StudyStatus = "new" | "due" | "learning" | "mastered";
+
+export async function getQuestionStatusMap(): Promise<
+  ActionResult<Record<string, StudyStatus>>
+> {
+  try {
+    const progress = await progressRepository.findAll();
+    const now = new Date();
+    const map: Record<string, StudyStatus> = {};
+
+    for (const p of progress) {
+      if (p.sm2.repetitions === 0) {
+        map[p.questionId] = "new";
+      } else if (new Date(p.sm2.nextReviewDate) <= now) {
+        map[p.questionId] = "due";
+      } else if (p.sm2.interval >= 30) {
+        map[p.questionId] = "mastered";
+      } else {
+        map[p.questionId] = "learning";
+      }
+    }
+
+    return { success: true, data: map };
+  } catch (error) {
+    console.error("Error getting status map:", error);
+    return { success: false, error: "Failed to get study statuses" };
+  }
+}
+
+/**
  * Reset progress for a specific question
  */
 export async function resetQuestionProgress(

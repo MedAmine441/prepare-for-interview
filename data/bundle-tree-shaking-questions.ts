@@ -165,4 +165,97 @@ function Page() {
     source: "seed",
     commonAt: ["Most React companies"],
   },
+  {
+    category: QUESTION_CATEGORIES.BUNDLE_TREE_SHAKING,
+    difficulty: "mid",
+    question:
+      "Your app's bundle has grown to 2MB. Walk through your process to find and eliminate the bloat.",
+    answer: `## 1. Measure before touching anything
+
+Generate a treemap of what's actually inside: \`webpack-bundle-analyzer\`, \`rollup-plugin-visualizer\`, \`source-map-explorer\`, or \`next build\` output. Look for: duplicate packages (two versions of the same lib), huge single dependencies, vendored code that should be split, and things that shouldn't be client-side at all.
+
+## 2. The usual suspects and fixes
+
+- **Heavyweight libraries with light alternatives**: moment (+locales!) → date-fns/dayjs; lodash → lodash-es with named imports or native methods; big charting/editor libs → dynamic import.
+- **Barrel-file imports** dragging whole libraries: \`import { X } from "big-ui-lib"\` can pull everything if the package isn't tree-shakeable — check with the analyzer, use per-module imports or \`optimizePackageImports\`.
+- **Duplicate dependencies**: dedupe via lockfile resolution; check why two majors coexist.
+- **Polyfills for browsers you don't support**: modern browserslist target.
+- **JSON/data/locales bundled in**: load on demand.
+
+## 3. Split what remains
+
+Route-level splitting first (frameworks do this), then component-level \`React.lazy\` for heavy below-the-fold or modal content (editors, charts, maps). Keep an eye on the waterfall cost of over-splitting.
+
+## 4. Lock it in
+
+- **Budgets in CI**: size-limit / bundlesize fail the PR on regression.
+- Import linting (no default lodash, no moment).
+- Periodic dependency audit — bundle bloat is a process problem, not a one-time fix.
+
+Rule of thumb to cite: initial JS budget ~150-200KB gzipped for good mobile TTI; everything else lazy.`,
+    keyPoints: [
+      "Analyze first — treemap the bundle, find duplicates and whales",
+      "Swap heavy deps, fix barrel imports, dedupe versions",
+      "Route-level then component-level code splitting for the rest",
+      "CI size budgets prevent regression — it's a process, not a cleanup",
+    ],
+    followUpQuestions: [
+      "How do you decide the boundary for a dynamic import?",
+      "What makes a library tree-shakeable or not?",
+    ],
+    relatedTopics: ["tree-shaking", "code-splitting", "ci", "lighthouse"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.BUNDLE_TREE_SHAKING,
+    difficulty: "mid",
+    question:
+      "Dynamic import() patterns: how do you lazy-load without hurting UX? Cover preloading, prefetching, and loading states.",
+    answer: `## The tension
+
+Splitting saves initial bytes but adds a **load-on-demand delay** exactly when the user wants the feature. Good lazy-loading hides that delay.
+
+## Patterns
+
+**1. Lazy with Suspense (React)**
+
+\`\`\`jsx
+const Editor = React.lazy(() => import("./Editor"));
+<Suspense fallback={<EditorSkeleton />}>{open && <Editor />}</Suspense>
+\`\`\`
+
+**2. Preload on intent** — start fetching before the user commits:
+
+\`\`\`jsx
+const preload = () => import("./Editor"); // browser caches the module promise
+<button onMouseEnter={preload} onFocus={preload} onClick={openEditor}>
+\`\`\`
+
+Hover-to-click gap (~100-300ms) often covers most of the chunk load. Same idea at the router level: Next/Router prefetches viewport-visible links' chunks automatically.
+
+**3. Declarative hints** — \`<link rel="prefetch">\` (idle-time, low priority — likely-next routes) vs \`<link rel="preload">\` (this navigation, high priority — critical chunks). Bundlers expose these as magic comments (\`/* webpackPrefetch: true */\`).
+
+**4. Idle-time warmup** — \`requestIdleCallback(() => import("./HeavyTab"))\` for things the user visits often.
+
+## Failure handling
+
+Chunk loads fail (deploys change hashes, flaky networks): wrap in an error boundary with retry; on \`ChunkLoadError\` after a deploy, a full reload picks up the new manifest.
+
+## What not to lazy-load
+
+The LCP-critical path, tiny components (request overhead > savings), and anything needed within the first interaction.`,
+    keyPoints: [
+      "Lazy-load charges the cost at click time — preloading hides it",
+      "Preload on hover/focus intent; prefetch likely-next routes at idle",
+      "prefetch = low-priority future; preload = high-priority now",
+      "Handle ChunkLoadError (deploy hash changes) with retry/reload",
+      "Don't split the critical path or tiny components",
+    ],
+    followUpQuestions: [
+      "How does the framework router decide what to prefetch?",
+      "Why can a dynamic import fail right after a deploy?",
+    ],
+    relatedTopics: ["code-splitting", "resource-hints", "suspense", "error-boundaries"],
+    source: "seed",
+  },
 ];

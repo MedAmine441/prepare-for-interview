@@ -19,17 +19,10 @@ import { createQuestionId, QUESTION_CATEGORIES } from '@/types';
  * Input validation schemas
  */
 const CreateQuestionSchema = z.object({
-  category: z.enum([
-    'system-design',
-    'caching-memoization',
-    'bundle-tree-shaking',
-    'security-auth',
-    'feature-flags',
-    'css-layout',
-    'js-event-loop',
-    'accessibility',
-    'react-internals',
-  ] as const),
+  // Derive from the single source of truth so new categories never drift
+  category: z.enum(
+    Object.values(QUESTION_CATEGORIES) as [QuestionCategory, ...QuestionCategory[]]
+  ),
   difficulty: z.enum(['junior', 'mid', 'senior'] as const),
   question: z.string().min(10, 'Question must be at least 10 characters'),
   answer: z.string().min(50, 'Answer must be at least 50 characters'),

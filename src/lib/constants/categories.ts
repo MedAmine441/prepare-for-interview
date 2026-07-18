@@ -7,6 +7,42 @@ import { QUESTION_CATEGORIES, createCategoryId } from '@/types';
  * Complete category metadata for UI display and filtering
  */
 export const CATEGORY_METADATA: Record<QuestionCategory, CategoryMetadata> = {
+  [QUESTION_CATEGORIES.JS_FUNDAMENTALS]: {
+    id: createCategoryId('js-fundamentals'),
+    slug: QUESTION_CATEGORIES.JS_FUNDAMENTALS,
+    name: 'JavaScript Fundamentals',
+    description:
+      'Closures, scope and hoisting, this binding, prototypes, coercion, promises and async patterns, modules, and core language mechanics.',
+    icon: 'Braces',
+    color: 'bg-amber-500',
+  },
+  [QUESTION_CATEGORIES.REACT_PATTERNS]: {
+    id: createCategoryId('react-patterns'),
+    slug: QUESTION_CATEGORIES.REACT_PATTERNS,
+    name: 'React Patterns & Hooks',
+    description:
+      'Practical React: useEffect pitfalls, memoization, state design, custom hooks, data fetching, error boundaries, and concurrent features.',
+    icon: 'Anchor',
+    color: 'bg-sky-500',
+  },
+  [QUESTION_CATEGORIES.TYPESCRIPT]: {
+    id: createCategoryId('typescript'),
+    slug: QUESTION_CATEGORIES.TYPESCRIPT,
+    name: 'TypeScript',
+    description:
+      'Type system essentials: interfaces vs types, generics, narrowing, utility and mapped types, discriminated unions, and typing React code.',
+    icon: 'FileType',
+    color: 'bg-indigo-500',
+  },
+  [QUESTION_CATEGORIES.WEB_PERFORMANCE]: {
+    id: createCategoryId('web-performance'),
+    slug: QUESTION_CATEGORIES.WEB_PERFORMANCE,
+    name: 'Web Performance',
+    description:
+      'Core Web Vitals, critical rendering path, image and font loading, main-thread scheduling, layout thrashing, and performance measurement.',
+    icon: 'Gauge',
+    color: 'bg-emerald-500',
+  },
   [QUESTION_CATEGORIES.SYSTEM_DESIGN]: {
     id: createCategoryId('system-design'),
     slug: QUESTION_CATEGORIES.SYSTEM_DESIGN,

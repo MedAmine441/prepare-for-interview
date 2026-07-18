@@ -20,6 +20,10 @@ export const createCategoryId = (id: string): CategoryId => id as CategoryId;
  * Question categories - const assertion for literal types and tree-shaking
  */
 export const QUESTION_CATEGORIES = {
+  JS_FUNDAMENTALS: 'js-fundamentals',
+  REACT_PATTERNS: 'react-patterns',
+  TYPESCRIPT: 'typescript',
+  WEB_PERFORMANCE: 'web-performance',
   SYSTEM_DESIGN: 'system-design',
   CACHING_MEMOIZATION: 'caching-memoization',
   BUNDLE_TREE_SHAKING: 'bundle-tree-shaking',

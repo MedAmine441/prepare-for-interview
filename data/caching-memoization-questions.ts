@@ -507,4 +507,93 @@ const selectTop5 = createSelector(
     source: "seed",
     commonAt: ["Bloomberg", "Goldman Sachs", "DataDog"],
   },
+  {
+    category: QUESTION_CATEGORIES.CACHING_MEMOIZATION,
+    difficulty: "mid",
+    question:
+      "Explain HTTP caching: Cache-Control directives, ETag validation, and the hashed-filename immutable pattern.",
+    answer: `## Two cache states
+
+- **Fresh** — within \`max-age\`; the browser serves it with **zero network traffic**.
+- **Stale** — freshness expired; the browser **revalidates**: sends \`If-None-Match: <etag>\` (or \`If-Modified-Since\`), and the server answers \`304 Not Modified\` (headers only, body reused) or \`200\` with new content.
+
+## The directives that matter
+
+\`\`\`
+Cache-Control: max-age=31536000, immutable   # hashed static assets
+Cache-Control: no-cache                       # cache, but revalidate every use
+Cache-Control: no-store                       # never cache (sensitive data)
+Cache-Control: private | public               # browser-only vs shared/CDN caches
+Cache-Control: s-maxage=60, stale-while-revalidate=300   # CDN-focused
+\`\`\`
+
+Common confusion worth naming: **\`no-cache\` does not mean "don't cache"** — it means "revalidate before use". \`no-store\` is the real off switch.
+
+## The canonical strategy
+
+1. **Hashed assets** (\`app.3f9c2a.js\`): content hash in the filename means the URL changes when content changes → \`max-age=31536000, immutable\`. Browsers never even revalidate. Bundlers do the hashing.
+2. **HTML** (the entry point): \`no-cache\` (or very short max-age) so users get new deploys immediately; it references the new hashed URLs.
+3. **API responses**: usually \`no-store\` or short \`private, max-age\` + ETags; let the app-level cache (React Query) do the heavy lifting.
+
+## ETag nuance
+
+Strong vs weak (\`W/"..."\`) validators; ETags also power conditional writes (\`If-Match\` for optimistic concurrency). On CDNs, prefer \`s-maxage\` + purge-on-deploy.`,
+    keyPoints: [
+      "Fresh = no request; stale = conditional request → 304 or 200",
+      "no-cache means always revalidate; no-store means never cache",
+      "Hashed filenames + immutable for assets; no-cache for HTML",
+      "ETag/If-None-Match saves bandwidth, not the round trip",
+      "s-maxage and stale-while-revalidate target shared/CDN caches",
+    ],
+    followUpQuestions: [
+      "How does stale-while-revalidate change perceived latency?",
+      "Why should the HTML entry never be immutable?",
+    ],
+    relatedTopics: ["cdn", "bundling", "http"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.CACHING_MEMOIZATION,
+    difficulty: "mid",
+    question:
+      "What is stale-while-revalidate? Explain the pattern at both the HTTP layer and the app layer (SWR/React Query).",
+    answer: `## The idea
+
+Serving cached-but-possibly-stale data **instantly**, while refreshing it **in the background** — trading strict freshness for perceived speed. Users see content in 0ms; the next view (or the same view, seconds later) is up to date.
+
+## HTTP layer
+
+\`\`\`
+Cache-Control: max-age=60, stale-while-revalidate=300
+\`\`\`
+
+For 60s the response is fresh. For the next 300s, a cache (CDN or browser) may serve the stale copy immediately **and** revalidate in the background. Related: \`stale-if-error\` serves stale content when origin is down — cheap resilience. CDNs implement this best; it's the backbone of "static-ish" content delivery (and of Next.js ISR conceptually).
+
+## App layer (the SWR strategy that named the library)
+
+React Query / SWR apply the same policy to client data:
+
+1. Component mounts → cached data returned **immediately** (no spinner).
+2. If the entry is older than \`staleTime\`, a background refetch fires.
+3. Fresh data arrives → cache updates → component re-renders.
+
+Revalidation triggers beyond mount: window refocus, network reconnect, interval polling, and mutation-driven invalidation (\`invalidateQueries\`). The knobs: \`staleTime\` (how long data is trusted) vs \`gcTime\` (how long unused data stays in memory) — mixing these up is the classic misconfiguration.
+
+## When NOT to use it
+
+Data where acting on stale values is harmful: prices at checkout, auth/permission state, anything transactional. There you want explicit freshness (no-store, refetch-before-action) rather than optimistic staleness.`,
+    keyPoints: [
+      "Serve stale instantly, revalidate in background — speed over strict freshness",
+      "HTTP: max-age + stale-while-revalidate (+ stale-if-error for resilience)",
+      "React Query/SWR: cached render → background refetch → update",
+      "staleTime governs trust; gcTime governs memory retention",
+      "Avoid for transactional/critical-freshness data",
+    ],
+    followUpQuestions: [
+      "How does mutation-based invalidation fit this model?",
+      "How does Next.js ISR apply the same idea to whole pages?",
+    ],
+    relatedTopics: ["react-query", "cdn", "http-caching", "isr"],
+    source: "seed",
+  },
 ];

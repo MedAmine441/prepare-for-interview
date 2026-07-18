@@ -16,6 +16,10 @@ export function formatCategory(category: string): string {
 
 export function getCategoryEmoji(slug: string): string {
   const emojiMap: Record<string, string> = {
+    'js-fundamentals': '📜',
+    'react-patterns': '🪝',
+    typescript: '🔷',
+    'web-performance': '⚡',
     'system-design': '🏗️',
     'caching-memoization': '💾',
     'bundle-tree-shaking': '📦',

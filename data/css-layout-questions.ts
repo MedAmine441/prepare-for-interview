@@ -184,4 +184,155 @@ In modern component-based architecture (React/Vue/Web Components), using \`displ
     source: "seed",
     commonAt: ["Senior Frontend Roles"],
   },
+  {
+    category: QUESTION_CATEGORIES.CSS_LAYOUT,
+    difficulty: "junior",
+    question:
+      "How does CSS specificity work? Explain the cascade order and where @layer fits in.",
+    answer: `## The cascade decides every property
+
+When multiple rules target an element, the winner is chosen by, in order: **origin & importance** (user-agent < user < author; \`!important\` reverses origin order) → **cascade layers** → **specificity** → **source order** (last wins).
+
+## Specificity as (A, B, C)
+
+Count per selector: **A** = id selectors, **B** = classes/attributes/pseudo-classes, **C** = element types/pseudo-elements. Compare left to right — \`(1,0,0)\` beats \`(0,10,0)\`.
+
+\`\`\`css
+#nav .item a      /* (1,1,1) */
+.nav .item a:hover /* (0,3,1) — loses to the id rule */
+\`\`\`
+
+Details worth knowing: inline \`style=""\` outranks all selectors; the universal selector adds nothing; \`:where(...)\` contributes **zero** specificity (great for resets), while \`:is(...)\`/\`:not(...)\` take the specificity of their most specific argument.
+
+## @layer
+
+Cascade layers let you order whole groups of rules **above specificity**:
+
+\`\`\`css
+@layer reset, components, utilities;
+@layer components { .btn { color: blue; } }
+@layer utilities  { .text-red { color: red; } } /* wins over ANY components rule */
+\`\`\`
+
+A later layer beats an earlier one regardless of selector strength — ending specificity wars structurally (unlayered styles beat all layers, so adopt it consistently). Tailwind v4 and modern design systems are built on this.
+
+## Hygiene
+
+Keep selectors flat (single class), avoid ids and \`!important\` in components, use \`:where()\` in shared resets so app code can always override.`,
+    keyPoints: [
+      "Cascade order: origin/importance → layers → specificity → source order",
+      "Specificity = (ids, classes/attrs/pseudo-classes, elements), compared left-first",
+      ":where() adds zero specificity; inline styles outrank selectors",
+      "@layer orders rule groups above specificity — ends specificity wars",
+    ],
+    followUpQuestions: [
+      "Why do utility classes and BEM both keep specificity flat?",
+      "How does !important interact with layers?",
+    ],
+    relatedTopics: ["cascade", "css-architecture", "design-systems"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.CSS_LAYOUT,
+    difficulty: "mid",
+    question:
+      "Container queries vs media queries: what problem do container queries solve, and how do you use them?",
+    answer: `## The problem with media queries
+
+Media queries respond to the **viewport**. But a reusable card renders in a wide main column on one page and a narrow sidebar on another — same viewport, completely different available space. Component libraries ended up with page-level overrides everywhere, breaking encapsulation.
+
+## Container queries: respond to the parent
+
+\`\`\`css
+.card-container {
+  container-type: inline-size;   /* establishes a query container */
+  container-name: card;           /* optional, for targeting */
+}
+
+.card { display: flex; flex-direction: column; }
+
+@container card (min-width: 400px) {
+  .card { flex-direction: row; }  /* horizontal when ITS OWN slot is wide */
+}
+\`\`\`
+
+The component now adapts to wherever it's placed — truly self-contained responsive design. \`container-type: inline-size\` is the practical value (width-only); it applies containment, so the element can't size itself from its contents' width.
+
+Also in the toolbox: **container query units** — \`cqw\`/\`cqi\` (1% of container width/inline-size) for fluid typography scoped to the container rather than the viewport.
+
+## How they divide the work now
+
+- **Media queries**: page-level layout (columns, nav collapse), user preferences (\`prefers-color-scheme\`, \`prefers-reduced-motion\`), input capabilities.
+- **Container queries**: every reusable component's internal layout.
+
+Baseline support since 2023 — safe to use, with mobile-first defaults as the natural fallback for old browsers.`,
+    keyPoints: [
+      "Media queries see the viewport; components care about their slot",
+      "container-type: inline-size + @container makes components self-adaptive",
+      "cqw/cqi units enable container-relative fluid sizing",
+      "Split: media for page layout & preferences, container for components",
+    ],
+    followUpQuestions: [
+      "Why does a query container need containment to avoid circularity?",
+      "What are style queries (@container style(...))?",
+    ],
+    relatedTopics: ["responsive-design", "css-containment", "design-systems"],
+    source: "seed",
+  },
+  {
+    category: QUESTION_CATEGORIES.CSS_LAYOUT,
+    difficulty: "junior",
+    question:
+      "What are the modern ways to center an element in CSS? Compare the approaches and their use cases.",
+    answer: `## The two modern defaults
+
+\`\`\`css
+/* Flexbox — centering content in a flow */
+.parent { display: flex; justify-content: center; align-items: center; }
+
+/* Grid — the shortest incantation */
+.parent { display: grid; place-content: center; }
+\`\`\`
+
+Either handles the historical nightmare (vertical centering of unknown-height content) in one rule. Use flex when the parent is already a flex row/column; \`place-content\` when the wrapper exists purely to center.
+
+## Centering yourself (no parent cooperation)
+
+\`\`\`css
+/* block axis: margin auto now works vertically in flex/grid parents */
+.child { margin: auto; }
+
+/* overlay/modal — out of flow */
+.modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;            /* with a fixed size */
+  /* or the classic: top: 50%; left: 50%; translate: -50% -50%; */
+  width: fit-content; height: fit-content;
+}
+\`\`\`
+
+The translate trick still matters when the element must stay positioned (tooltips, popovers) — though \`anchor positioning\` is arriving for exactly that.
+
+## Text and inline content
+
+- Horizontal: \`text-align: center\`.
+- Single-line vertical: line-height matching height (old school) — prefer flex on the container now.
+
+## What to say in an interview
+
+Name flex/grid first, then show you know **why** the old hacks existed (no block-axis centering primitive before flex), and match the tool to context: content in a container → flex/grid; overlays → fixed + inset + margin auto; never absolute-position for normal document flow.`,
+    keyPoints: [
+      "flex justify/align-items or grid place-content are the defaults",
+      "inset: 0 + margin: auto centers fixed/absolute overlays",
+      "translate(-50%,-50%) remains for positioned tooltips/popovers",
+      "Match technique to context — don't absolutely position normal flow",
+    ],
+    followUpQuestions: [
+      "How does margin: auto behave differently in flex vs block layout?",
+      "How would you center a tooltip relative to its trigger?",
+    ],
+    relatedTopics: ["flexbox", "grid", "positioning"],
+    source: "seed",
+  },
 ];

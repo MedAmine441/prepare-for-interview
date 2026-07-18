@@ -8,8 +8,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Loader2,
+  PenLine,
   RotateCcw,
   Sparkles,
+  XCircle,
 } from "lucide-react";
 import type {
   QuestionCategory,
@@ -25,6 +27,11 @@ import {
   getStudySessionStats,
 } from "@/actions/flashcard.actions";
 import { getQuestions } from "@/actions/question.actions";
+import {
+  evaluateTypedAnswer,
+  type AnswerEvaluation,
+  type SuggestedRating,
+} from "@/actions/evaluate.actions";
 import {
   formatCategory,
   getDifficultyColor,
@@ -56,6 +63,14 @@ interface RatingTally {
 
 const EMPTY_TALLY: RatingTally = { again: 0, hard: 0, good: 0, easy: 0 };
 
+/** AI grading of a typed answer, pinned to the card it was requested for */
+type EvalState =
+  | { questionId: string; status: "loading" }
+  | { questionId: string; status: "done"; evaluation: AnswerEvaluation }
+  | { questionId: string; status: "error"; error: string };
+
+const TYPE_MODE_STORAGE_KEY = "fm-type-answers";
+
 export function FlashcardArena({
   category,
   difficulty,
@@ -70,6 +85,15 @@ export function FlashcardArena({
   const [cardCount, setCardCount] = useState(0);
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [tally, setTally] = useState<RatingTally>(EMPTY_TALLY);
+
+  // Type-your-answer (active recall) state
+  const [typeMode, setTypeMode] = useState(false);
+  const [typedAnswer, setTypedAnswer] = useState("");
+  const [evalState, setEvalState] = useState<EvalState | null>(null);
+
+  useEffect(() => {
+    setTypeMode(localStorage.getItem(TYPE_MODE_STORAGE_KEY) === "1");
+  }, []);
 
   // Review mode state
   const [currentCard, setCurrentCard] = useState<{
@@ -94,6 +118,8 @@ export function FlashcardArena({
     setError(null);
     setIsFlipped(false);
     setShowFullAnswer(false);
+    setTypedAnswer("");
+    setEvalState(null);
 
     try {
       const [result, stats] = await Promise.all([
@@ -138,6 +164,8 @@ export function FlashcardArena({
     setError(null);
     setIsFlipped(false);
     setShowFullAnswer(false);
+    setTypedAnswer("");
+    setEvalState(null);
 
     try {
       const result = await getQuestions({
@@ -184,6 +212,48 @@ export function FlashcardArena({
     }
   }, [isSubmitting, question]);
 
+  const toggleTypeMode = useCallback(() => {
+    setTypeMode((t) => {
+      const next = !t;
+      localStorage.setItem(TYPE_MODE_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
+  /** Reveal the card and have AI grade the typed answer against the key points */
+  const handleTypedSubmit = useCallback(async () => {
+    const trimmed = typedAnswer.trim();
+    if (!question || isSubmitting || isFlipped || !trimmed) return;
+
+    const questionId = question.id as string;
+    setIsFlipped(true);
+    setShowFullAnswer(false);
+    setEvalState({ questionId, status: "loading" });
+
+    try {
+      const result = await evaluateTypedAnswer(questionId, trimmed);
+      // Only apply if the user hasn't already moved to another card
+      setEvalState((prev) =>
+        prev?.questionId === questionId && prev.status === "loading"
+          ? result.success
+            ? { questionId, status: "done", evaluation: result.data }
+            : { questionId, status: "error", error: result.error }
+          : prev,
+      );
+    } catch (err) {
+      console.error(err);
+      setEvalState((prev) =>
+        prev?.questionId === questionId && prev.status === "loading"
+          ? {
+              questionId,
+              status: "error",
+              error: "AI grading failed — rate yourself below",
+            }
+          : prev,
+      );
+    }
+  }, [question, isSubmitting, isFlipped, typedAnswer]);
+
   const handleRating = useCallback(
     async (quality: SM2Quality) => {
       if (mode !== "review" || !currentCard || isSubmitting || !isFlipped) return;
@@ -227,6 +297,8 @@ export function FlashcardArena({
     if (mode !== "practice" || !isFlipped) return;
     setIsFlipped(false);
     setShowFullAnswer(false);
+    setTypedAnswer("");
+    setEvalState(null);
     if (deckIndex + 1 >= deck.length) {
       setSessionComplete(true);
     } else {
@@ -239,6 +311,8 @@ export function FlashcardArena({
     if (mode !== "practice" || !isFlipped) return;
     setIsFlipped(false);
     setShowFullAnswer(false);
+    setTypedAnswer("");
+    setEvalState(null);
     // Move the current card to the end of the deck so it comes back
     setDeck((d) => [
       ...d.slice(0, deckIndex),
@@ -405,6 +479,14 @@ export function FlashcardArena({
   if (!question) return null;
 
   const previews = currentCard?.intervalPreviews;
+  const activeEval =
+    evalState && evalState.questionId === (question.id as string)
+      ? evalState
+      : null;
+  const suggestedRating: SuggestedRating | null =
+    mode === "review" && activeEval?.status === "done"
+      ? activeEval.evaluation.suggestedRating
+      : null;
 
   return (
     <div className="max-w-2xl mx-auto px-4">
@@ -434,25 +516,43 @@ export function FlashcardArena({
             </>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {isFlipped ? (
-            mode === "review" ? (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTypeMode}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+              typeMode
+                ? "bg-primary/10 border-primary/30 text-primary"
+                : "border-border text-muted-foreground hover:bg-secondary/50"
+            }`}
+            title="Type your answer before revealing — AI grades it against the key points"
+          >
+            <PenLine className="w-3.5 h-3.5" />
+            Type answers
+          </button>
+          <p className="text-xs text-muted-foreground">
+            {isFlipped ? (
+              mode === "review" ? (
+                <>
+                  Rate with <span className="kbd">1</span>–
+                  <span className="kbd">4</span>
+                </>
+              ) : (
+                <>
+                  <span className="kbd">Enter</span> next ·{" "}
+                  <span className="kbd">R</span> repeat
+                </>
+              )
+            ) : typeMode ? (
               <>
-                Rate with <span className="kbd">1</span>–
-                <span className="kbd">4</span>
+                <span className="kbd">Enter</span> to grade
               </>
             ) : (
               <>
-                <span className="kbd">Enter</span> next ·{" "}
-                <span className="kbd">R</span> repeat
+                <span className="kbd">Space</span> to reveal
               </>
-            )
-          ) : (
-            <>
-              <span className="kbd">Space</span> to reveal
-            </>
-          )}
-        </p>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* Card */}
@@ -460,10 +560,10 @@ export function FlashcardArena({
         <div className={`flashcard-inner ${isFlipped ? "flipped" : ""}`}>
           {/* Front */}
           <Card
-            onClick={handleFlip}
-            className={`flashcard-front cursor-pointer overflow-hidden shadow-md ${
-              isFlipped ? "absolute inset-0" : "relative min-h-[280px]"
-            }`}
+            onClick={typeMode ? undefined : handleFlip}
+            className={`flashcard-front overflow-hidden shadow-md ${
+              typeMode ? "" : "cursor-pointer"
+            } ${isFlipped ? "absolute inset-0" : "relative min-h-[280px]"}`}
           >
             <div className="h-1 bg-brand-gradient" aria-hidden />
             <CardContent className="p-6 h-full flex flex-col">
@@ -479,15 +579,59 @@ export function FlashcardArena({
                 </Badge>
               </div>
 
-              <div className="flex-1 flex items-center justify-center py-8">
-                <h2 className="text-xl font-medium text-center leading-relaxed">
-                  {question.question}
-                </h2>
-              </div>
+              {typeMode ? (
+                <>
+                  <div className="py-4">
+                    <h2 className="text-lg font-medium leading-relaxed">
+                      {question.question}
+                    </h2>
+                  </div>
+                  <textarea
+                    key={question.id as string}
+                    autoFocus
+                    value={typedAnswer}
+                    onChange={(e) => setTypedAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleTypedSubmit();
+                      }
+                    }}
+                    placeholder="Answer from memory... (Shift+Enter for a new line)"
+                    rows={5}
+                    disabled={isFlipped}
+                    className="w-full p-3 rounded-lg border bg-background resize-none text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <div className="flex items-center justify-between mt-3">
+                    <button
+                      onClick={handleFlip}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Reveal without typing
+                    </button>
+                    <Button
+                      size="sm"
+                      onClick={handleTypedSubmit}
+                      disabled={!typedAnswer.trim()}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                      Grade my answer
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex-1 flex items-center justify-center py-8">
+                    <h2 className="text-xl font-medium text-center leading-relaxed">
+                      {question.question}
+                    </h2>
+                  </div>
 
-              <p className="text-xs text-muted-foreground text-center">
-                Click or press Space to reveal the answer
-              </p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Click or press Space to reveal the answer
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -504,18 +648,61 @@ export function FlashcardArena({
               </p>
               <Separator className="mb-4" />
 
+              {/* AI grading of the typed answer */}
+              {activeEval?.status === "loading" && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Grading your answer against the key points...
+                </div>
+              )}
+              {activeEval?.status === "error" && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  {activeEval.error}
+                </p>
+              )}
+              {activeEval?.status === "done" && (
+                <div className="rounded-lg border bg-secondary/30 p-3 mb-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      AI Verdict
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs capitalize ml-auto ${getRatingColor(
+                        activeEval.evaluation.suggestedRating,
+                      )}`}
+                    >
+                      {activeEval.evaluation.suggestedRating}
+                    </Badge>
+                  </div>
+                  <p className="text-sm leading-relaxed">
+                    {activeEval.evaluation.feedback}
+                  </p>
+                </div>
+              )}
+
               {/* Concise answer first — the key points */}
               <div className="mb-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
                   Quick Answer
                 </p>
                 <ul className="space-y-2.5">
-                  {question.keyPoints.map((point, i) => (
-                    <li key={i} className="flex items-start gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                      <span className="text-sm leading-relaxed">{point}</span>
-                    </li>
-                  ))}
+                  {question.keyPoints.map((point, i) => {
+                    const missed =
+                      activeEval?.status === "done" &&
+                      activeEval.evaluation.keyPointsCovered[i] === false;
+                    return (
+                      <li key={i} className="flex items-start gap-2.5">
+                        {missed ? (
+                          <XCircle className="w-4 h-4 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                        )}
+                        <span className="text-sm leading-relaxed">{point}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
 
@@ -578,6 +765,7 @@ export function FlashcardArena({
               shortcut="1"
               onClick={() => handleRating(QUALITY_BUTTONS.AGAIN)}
               variant="again"
+              suggested={suggestedRating === "again"}
             />
             <RatingButton
               label="Hard"
@@ -585,6 +773,7 @@ export function FlashcardArena({
               shortcut="2"
               onClick={() => handleRating(QUALITY_BUTTONS.HARD)}
               variant="hard"
+              suggested={suggestedRating === "hard"}
             />
             <RatingButton
               label="Good"
@@ -592,6 +781,7 @@ export function FlashcardArena({
               shortcut="3"
               onClick={() => handleRating(QUALITY_BUTTONS.GOOD)}
               variant="good"
+              suggested={suggestedRating === "good"}
             />
             <RatingButton
               label="Easy"
@@ -599,6 +789,7 @@ export function FlashcardArena({
               shortcut="4"
               onClick={() => handleRating(QUALITY_BUTTONS.EASY)}
               variant="easy"
+              suggested={suggestedRating === "easy"}
             />
           </div>
         )}
@@ -613,9 +804,17 @@ interface RatingButtonProps {
   shortcut: string;
   onClick: () => void;
   variant: "again" | "hard" | "good" | "easy";
+  suggested?: boolean;
 }
 
-function RatingButton({ label, sublabel, shortcut, onClick, variant }: RatingButtonProps) {
+function RatingButton({
+  label,
+  sublabel,
+  shortcut,
+  onClick,
+  variant,
+  suggested = false,
+}: RatingButtonProps) {
   const variantStyles = {
     again:
       "bg-red-500/[.04] border-red-500/25 text-red-700 hover:bg-red-500/15 dark:bg-red-500/[.08] dark:text-red-400 dark:hover:bg-red-500/20",
@@ -627,14 +826,35 @@ function RatingButton({ label, sublabel, shortcut, onClick, variant }: RatingBut
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center py-3 rounded-lg border transition-colors ${variantStyles[variant]}`}
+      className={`flex flex-col items-center justify-center py-3 rounded-lg border transition-colors ${
+        variantStyles[variant]
+      } ${suggested ? "ring-2 ring-primary/60" : ""}`}
     >
       <span className="font-medium text-sm">
         {label} <span className="kbd ml-0.5">{shortcut}</span>
       </span>
       <span className="text-xs opacity-70 mt-0.5 font-mono">{sublabel}</span>
+      {suggested && (
+        <span className="text-[10px] font-medium text-primary mt-0.5">
+          AI suggests
+        </span>
+      )}
     </button>
   );
+}
+
+/** Badge classes for an AI-suggested rating, matching the button semantics */
+function getRatingColor(rating: SuggestedRating): string {
+  switch (rating) {
+    case "again":
+      return "text-red-600 border-red-300 dark:text-red-400 dark:border-red-900";
+    case "hard":
+      return "text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-900";
+    case "good":
+      return "text-green-600 border-green-300 dark:text-green-400 dark:border-green-900";
+    case "easy":
+      return "text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-900";
+  }
 }
 
 function PracticeButton({

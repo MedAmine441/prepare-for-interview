@@ -4,7 +4,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Send, Loader2, Flag, Target } from 'lucide-react';
+import { Send, Loader2, Flag, Target, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,48 @@ type AnalysisState =
   | { status: 'loading' }
   | { status: 'done'; result: InterviewAnalysisResult }
   | { status: 'error'; error: string };
+
+/**
+ * Minimal Web Speech API surface — SpeechRecognition is Chrome-only
+ * (webkit-prefixed) and absent from TypeScript's dom lib.
+ */
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult:
+    | ((event: {
+        resultIndex: number;
+        results: ArrayLike<
+          ArrayLike<{ transcript: string }> & { isFinal: boolean }
+        >;
+      }) => void)
+    | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  }
+}
+
+const VOICE_MODE_STORAGE_KEY = 'fm-voice-mode';
+
+/** Make markdown listenable: drop code blocks and formatting characters */
+function stripForSpeech(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' Code example omitted. ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/[*_#>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 interface InterviewChatProps {
   sessionId: string;
@@ -49,6 +91,151 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bootstrappedRef = useRef(false);
+
+  // Voice mode: hear the interviewer, dictate your answers
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [interim, setInterim] = useState('');
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const wantListeningRef = useRef(false);
+  const pausedForSpeechRef = useRef(false);
+  const lastSpokenIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setVoiceMode(localStorage.getItem(VOICE_MODE_STORAGE_KEY) === '1');
+  }, []);
+
+  const ensureRecognition = useCallback((): SpeechRecognitionLike | null => {
+    if (recognitionRef.current) return recognitionRef.current;
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Ctor) {
+      setSpeechSupported(false);
+      return null;
+    }
+    const rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (event) => {
+      let interimText = '';
+      let finalText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0]?.transcript ?? '';
+        if (event.results[i].isFinal) finalText += transcript;
+        else interimText += transcript;
+      }
+      if (finalText.trim()) {
+        setInput((prev) => (prev ? `${prev} ` : '') + finalText.trim());
+      }
+      setInterim(interimText);
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      setInterim('');
+      // Chrome stops after silence — keep going until the user says stop
+      if (wantListeningRef.current && !pausedForSpeechRef.current) {
+        try {
+          rec.start();
+          setIsListening(true);
+        } catch {
+          // Already started or torn down
+        }
+      }
+    };
+    rec.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        wantListeningRef.current = false;
+        setSpeechSupported(false);
+      }
+    };
+    recognitionRef.current = rec;
+    return rec;
+  }, []);
+
+  const startListening = useCallback(() => {
+    const rec = ensureRecognition();
+    if (!rec) return;
+    wantListeningRef.current = true;
+    pausedForSpeechRef.current = false;
+    try {
+      rec.start();
+      setIsListening(true);
+    } catch {
+      // start() throws if already running
+    }
+  }, [ensureRecognition]);
+
+  const stopListening = useCallback(() => {
+    wantListeningRef.current = false;
+    pausedForSpeechRef.current = false;
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    setInterim('');
+  }, []);
+
+  const speak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(stripForSpeech(text));
+    utterance.rate = 1.05;
+    // Mute the mic while the interviewer talks so it doesn't hear itself
+    utterance.onstart = () => {
+      if (wantListeningRef.current && recognitionRef.current) {
+        pausedForSpeechRef.current = true;
+        recognitionRef.current.stop();
+      }
+    };
+    utterance.onend = () => {
+      if (pausedForSpeechRef.current) {
+        pausedForSpeechRef.current = false;
+        if (wantListeningRef.current) {
+          try {
+            recognitionRef.current?.start();
+            setIsListening(true);
+          } catch {
+            // Already started
+          }
+        }
+      }
+    };
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  // Read each new interviewer message aloud in voice mode
+  useEffect(() => {
+    if (!voiceMode) return;
+    const last = messages[messages.length - 1];
+    if (last && last.role === 'assistant' && lastSpokenIdRef.current !== last.id) {
+      lastSpokenIdRef.current = last.id;
+      speak(last.content);
+    }
+  }, [messages, voiceMode, speak]);
+
+  const toggleVoiceMode = useCallback(() => {
+    const next = !voiceMode;
+    localStorage.setItem(VOICE_MODE_STORAGE_KEY, next ? '1' : '0');
+    if (next) {
+      // Don't replay the reply that's already on screen
+      const lastAssistant = [...messages]
+        .reverse()
+        .find((m) => m.role === 'assistant');
+      lastSpokenIdRef.current = lastAssistant?.id ?? null;
+    } else {
+      window.speechSynthesis?.cancel();
+      stopListening();
+    }
+    setVoiceMode(next);
+  }, [voiceMode, messages, stopListening]);
+
+  // Tear down audio when leaving the page
+  useEffect(() => {
+    return () => {
+      wantListeningRef.current = false;
+      recognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
 
   const sendToModel = useCallback(
     async (
@@ -326,38 +513,90 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your answer... (Shift+Enter for new line)"
-              rows={3}
-              className="flex-1 p-3 rounded-lg border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={isLoading}
-            />
-            <div className="flex flex-col gap-2">
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="flex-1 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Send answer"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-              <button
-                type="button"
-                onClick={handleEndInterview}
-                disabled={isLoading || messages.length < 2}
-                className="px-4 py-2 rounded-lg border text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="End the interview and get your debrief"
-                aria-label="End interview and get feedback"
-              >
-                <Flag className="w-4 h-4" />
-              </button>
-            </div>
-          </form>
+          <div>
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              {voiceMode && (
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={!speechSupported}
+                  className={`px-4 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isListening
+                      ? 'bg-red-500/10 border-red-500/40 text-red-600 dark:text-red-400'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                  }`}
+                  title={isListening ? 'Stop the microphone' : 'Answer by speaking'}
+                  aria-label={isListening ? 'Stop listening' : 'Start speaking'}
+                >
+                  {isListening ? (
+                    <Mic className="w-5 h-5 animate-pulse" />
+                  ) : (
+                    <MicOff className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  voiceMode
+                    ? 'Speak or type your answer...'
+                    : 'Type your answer... (Shift+Enter for new line)'
+                }
+                rows={3}
+                className="flex-1 p-3 rounded-lg border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={isLoading}
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="flex-1 px-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="Send answer"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleVoiceMode}
+                  className={`px-4 py-2 rounded-lg border transition-colors ${
+                    voiceMode
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                  }`}
+                  title="Voice mode — hear the interviewer and answer by speaking"
+                  aria-label="Toggle voice mode"
+                >
+                  {voiceMode ? (
+                    <Volume2 className="w-4 h-4" />
+                  ) : (
+                    <VolumeX className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEndInterview}
+                  disabled={isLoading || messages.length < 2}
+                  className="px-4 py-2 rounded-lg border text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="End the interview and get your debrief"
+                  aria-label="End interview and get feedback"
+                >
+                  <Flag className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
+            {voiceMode && (
+              <p className="text-xs text-muted-foreground mt-2 min-h-4 italic truncate">
+                {!speechSupported
+                  ? 'Speech recognition is unavailable — check mic permissions (Chrome required).'
+                  : isListening
+                    ? interim || 'Listening... speak your answer, then hit send.'
+                    : 'Voice mode on — tap the mic to answer out loud.'}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -14,6 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getFlashcardsOverview } from "@/actions/flashcard.actions";
+import { getInterviewDate } from "@/actions/settings.actions";
+import { InterviewCountdown } from "@/components/home/InterviewCountdown";
 import { ALL_CATEGORIES } from "@/lib/constants/categories";
 import { getCategoryEmoji } from "@/lib/utils/question-format";
 
@@ -23,6 +25,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const result = await getFlashcardsOverview();
   const overview = result.success ? result.data : null;
+  const interviewDate = await getInterviewDate();
 
   const dueTotal = overview ? overview.dueCount + overview.newCount : 0;
   const categoryStats = new Map(
@@ -59,6 +62,13 @@ export default async function HomePage() {
           </Button>
         </div>
       </section>
+
+      {/* Interview countdown & pacing */}
+      <InterviewCountdown
+        interviewDate={interviewDate}
+        newCount={overview?.newCount ?? 0}
+        dueCount={overview?.dueCount ?? 0}
+      />
 
       {/* Features */}
       <section className="grid md:grid-cols-3 gap-4 mb-16">

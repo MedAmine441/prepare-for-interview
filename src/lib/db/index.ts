@@ -1,6 +1,6 @@
 // src/lib/db/index.ts
 
-import { join } from "path";
+import { join, dirname } from "path";
 import { mkdirSync } from "fs";
 import { DatabaseSync } from "node:sqlite";
 
@@ -10,16 +10,20 @@ import { DatabaseSync } from "node:sqlite";
  *
  * The driver is synchronous; repositories keep async signatures so
  * server actions and any future driver swap stay source-compatible.
+ *
+ * FRONTMASTER_DB_PATH overrides the location — the test suite points it
+ * at a throwaway file so tests never touch real study data.
  */
-const DB_PATH = join(process.cwd(), "data", "frontmaster.db");
-
 let db: DatabaseSync | null = null;
 
 export function getDb(): DatabaseSync {
   if (db) return db;
 
-  mkdirSync(join(process.cwd(), "data"), { recursive: true });
-  db = new DatabaseSync(DB_PATH);
+  const dbPath =
+    process.env.FRONTMASTER_DB_PATH ||
+    join(process.cwd(), "data", "frontmaster.db");
+  mkdirSync(dirname(dbPath), { recursive: true });
+  db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   initSchema(db);

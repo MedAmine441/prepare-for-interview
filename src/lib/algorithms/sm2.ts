@@ -39,6 +39,13 @@ const DEFAULT_EASE_FACTOR = 2.5;
 const PASSING_QUALITY = 3;
 
 /**
+ * Maximum interval in days (10 years, Anki-style cap).
+ * Without a cap the interval compounds by the ease factor every review
+ * and eventually overflows the valid Date range.
+ */
+const MAX_INTERVAL_DAYS = 3650;
+
+/**
  * Calculate the new SM-2 state after a review
  *
  * @param currentState - The current SM-2 state
@@ -87,6 +94,8 @@ export function calculateSM2(
       newInterval = Math.round(currentState.interval * newEaseFactor);
     }
   }
+
+  newInterval = Math.min(newInterval, MAX_INTERVAL_DAYS);
 
   // Calculate next review date
   const nextReviewDate = new Date();

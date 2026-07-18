@@ -33,6 +33,7 @@ export const QUESTION_CATEGORIES = {
   JS_EVENT_LOOP: 'js-event-loop',
   ACCESSIBILITY: 'accessibility',
   REACT_INTERNALS: 'react-internals',
+  BEHAVIORAL: 'behavioral',
 } as const;
 
 export type QuestionCategory = typeof QUESTION_CATEGORIES[keyof typeof QUESTION_CATEGORIES];

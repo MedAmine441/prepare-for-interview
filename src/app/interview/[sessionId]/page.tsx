@@ -50,6 +50,9 @@ export default async function InterviewSessionPage({ params }: SessionPageProps)
       question: q.question,
       keyPoints: q.keyPoints,
     })),
+    hasBehavioral:
+      categories.includes("behavioral") ||
+      bankQuestions.some((q) => q.category === "behavioral"),
   });
 
   // With bank questions we can open deterministically (no API round-trip);
@@ -107,8 +110,10 @@ function buildInterviewerPrompt(config: {
   mode: string;
   maxQuestions: number;
   bankQuestions: Array<{ question: string; keyPoints: string[] }>;
+  hasBehavioral?: boolean;
 }): string {
-  const { topicLabel, difficulty, mode, maxQuestions, bankQuestions } = config;
+  const { topicLabel, difficulty, mode, maxQuestions, bankQuestions, hasBehavioral } =
+    config;
 
   let prompt = `You are an experienced senior frontend engineer conducting a realistic mock technical interview.
 
@@ -138,6 +143,11 @@ Rules:
 - Never answer a question for the candidate unless they explicitly give up on it.
 - If an answer is vague, ask them to be specific rather than filling gaps yourself.
 - After the final question — or if the candidate asks to stop — give an overall debrief: strengths, the top 3 gaps, and the specific topics they should study next.`;
+
+  if (hasBehavioral) {
+    prompt += `
+- For behavioral questions, coach the STAR structure: a concrete Situation, the candidate's own Task, the specific Actions THEY took (watch for "we" hiding "I"), and a measurable Result. Call out hypothetical or generic answers — demand a real story. Flag rambling: a strong spoken answer runs about two minutes.`;
+  }
 
   return prompt;
 }

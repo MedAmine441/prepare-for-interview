@@ -124,6 +124,15 @@ export const CATEGORY_METADATA: Record<QuestionCategory, CategoryMetadata> = {
     icon: 'Atom',
     color: 'bg-cyan-500',
   },
+  [QUESTION_CATEGORIES.BEHAVIORAL]: {
+    id: createCategoryId('behavioral'),
+    slug: QUESTION_CATEGORIES.BEHAVIORAL,
+    name: 'Behavioral & Stories',
+    description:
+      'STAR-format storytelling: conflict, failure, leadership, feedback, and the classic non-technical questions that decide offers.',
+    icon: 'Users',
+    color: 'bg-rose-500',
+  },
 };
 
 /**

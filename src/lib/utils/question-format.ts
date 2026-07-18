@@ -29,6 +29,7 @@ export function getCategoryEmoji(slug: string): string {
     'js-event-loop': '🔄',
     accessibility: '♿',
     'react-internals': '⚛️',
+    behavioral: '🗣️',
   };
   return emojiMap[slug] || '📚';
 }

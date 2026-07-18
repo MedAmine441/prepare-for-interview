@@ -133,6 +133,15 @@ export const CATEGORY_METADATA: Record<QuestionCategory, CategoryMetadata> = {
     icon: 'Users',
     color: 'bg-rose-500',
   },
+  [QUESTION_CATEGORIES.TESTING]: {
+    id: createCategoryId('testing'),
+    slug: QUESTION_CATEGORIES.TESTING,
+    name: 'Testing & Quality',
+    description:
+      'Jest, React Testing Library, Playwright, mocking strategy, async testing, flaky-test debugging, and what to test at which level.',
+    icon: 'FlaskConical',
+    color: 'bg-lime-600',
+  },
 };
 
 /**

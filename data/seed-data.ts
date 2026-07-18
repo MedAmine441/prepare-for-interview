@@ -37,6 +37,7 @@ import { reactPatternsQuestions } from "./react-patterns-questions";
 import { typescriptQuestions } from "./typescript-questions";
 import { webPerformanceQuestions } from "./web-performance-questions";
 import { behavioralQuestions } from "./behavioral-questions";
+import { testingQuestions } from "./testing-questions";
 
 // Export all questions combined.
 // NOTE: seed ids are per-category counters over this array's order —
@@ -56,6 +57,7 @@ export const ALL_SEED_QUESTIONS: CreateQuestionInput[] = [
   ...typescriptQuestions,
   ...webPerformanceQuestions,
   ...behavioralQuestions,
+  ...testingQuestions,
 ];
 
 // Export individual categories for selective seeding
@@ -74,4 +76,5 @@ export {
   typescriptQuestions,
   webPerformanceQuestions,
   behavioralQuestions,
+  testingQuestions,
 };

@@ -30,6 +30,7 @@ export function getCategoryEmoji(slug: string): string {
     accessibility: '♿',
     'react-internals': '⚛️',
     behavioral: '🗣️',
+    testing: '🧪',
   };
   return emojiMap[slug] || '📚';
 }

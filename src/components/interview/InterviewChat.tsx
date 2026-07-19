@@ -76,13 +76,31 @@ interface InterviewChatProps {
    * When null the model is asked to open the interview itself.
    */
   openingMessage: string | null;
+  /** Persisted transcript of an in-progress session — resumes the chat */
+  initialMessages?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    createdAt: string;
+  }>;
 }
 
 const END_INTERVIEW_INSTRUCTION =
   'I would like to end the interview here. Please give me the overall debrief now: my strengths, my top 3 gaps, and the specific topics I should study next.';
 
-export function InterviewChat({ sessionId, systemPrompt, openingMessage }: InterviewChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function InterviewChat({
+  sessionId,
+  systemPrompt,
+  openingMessage,
+  initialMessages,
+}: InterviewChatProps) {
+  const [messages, setMessages] = useState<Message[]>(() =>
+    (initialMessages ?? []).map((m, i) => ({
+      id: `restored-${i}`,
+      role: m.role,
+      content: m.content,
+      timestamp: new Date(m.createdAt),
+    })),
+  );
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -100,7 +118,17 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantListeningRef = useRef(false);
   const pausedForSpeechRef = useRef(false);
-  const lastSpokenIdRef = useRef<string | null>(null);
+  // Seed with the last restored assistant message so resuming a session
+  // doesn't read an old reply aloud
+  const lastSpokenIdRef = useRef<string | null>(
+    (() => {
+      const restored = initialMessages ?? [];
+      for (let i = restored.length - 1; i >= 0; i--) {
+        if (restored[i].role === 'assistant') return `restored-${i}`;
+      }
+      return null;
+    })(),
+  );
 
   useEffect(() => {
     setVoiceMode(localStorage.getItem(VOICE_MODE_STORAGE_KEY) === '1');
@@ -353,6 +381,9 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
     if (bootstrappedRef.current) return;
     bootstrappedRef.current = true;
 
+    // Resumed session — the transcript is already on screen
+    if (initialMessages && initialMessages.length > 0) return;
+
     if (openingMessage) {
       setMessages([
         {
@@ -367,7 +398,7 @@ export function InterviewChat({ sessionId, systemPrompt, openingMessage }: Inter
         hidden: true,
       });
     }
-  }, [sessionId, openingMessage, sendToModel]);
+  }, [sessionId, openingMessage, initialMessages, sendToModel]);
 
   // Scroll to bottom when messages change
   useEffect(() => {

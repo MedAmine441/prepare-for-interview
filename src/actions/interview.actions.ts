@@ -288,6 +288,63 @@ Respond with ONLY a JSON array (no markdown fences, no commentary):
 }
 
 /**
+ * The most recent active session that actually got going — offered as a
+ * resume target on the setup page.
+ */
+export async function getResumableSession(): Promise<
+  ActionResult<{
+    sessionId: string;
+    startedAt: string;
+    topicLabel: string;
+    messageCount: number;
+  } | null>
+> {
+  try {
+    const actives = await interviewRepository.findActive();
+    const resumable = actives
+      .filter((s) => s.messages.length > 0)
+      .sort(
+        (a, b) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      )[0];
+
+    if (!resumable) return { success: true, data: null };
+
+    return {
+      success: true,
+      data: {
+        sessionId: resumable.id,
+        startedAt: resumable.startedAt,
+        topicLabel:
+          resumable.config.categories.length > 0
+            ? resumable.config.categories.join(", ")
+            : "all topics",
+        messageCount: resumable.messages.length,
+      },
+    };
+  } catch (error) {
+    console.error("Error finding resumable session:", error);
+    return { success: false, error: "Failed to check for unfinished interviews" };
+  }
+}
+
+/**
+ * Discard an unfinished interview from the setup page.
+ */
+export async function abandonInterview(
+  sessionId: string,
+): Promise<ActionResult<void>> {
+  try {
+    await interviewRepository.updateStatus(createSessionId(sessionId), "abandoned");
+    revalidatePath("/interview");
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("Error abandoning interview:", error);
+    return { success: false, error: "Failed to discard the interview" };
+  }
+}
+
+/**
  * List past (non-active) sessions for the history page.
  */
 export async function getRecentSessions(

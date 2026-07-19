@@ -26,8 +26,19 @@ export default async function InterviewSessionPage({ params }: SessionPageProps)
   if (!session) {
     redirect("/interview");
   }
+  // Finished sessions live in history — only active ones can be chatted
+  if (session.status !== "active") {
+    redirect(`/interview/history/${sessionId}`);
+  }
 
   const { categories, difficulty, mode, maxQuestions } = session.config;
+
+  // A refresh mid-interview picks the conversation back up where it was
+  const initialMessages = session.messages.map((m) => ({
+    role: m.role === "interviewer" ? ("assistant" as const) : ("user" as const),
+    content: m.content,
+    createdAt: m.createdAt,
+  }));
 
   // The bank questions were picked at session start — same set on every render
   const bankQuestions = (
@@ -98,6 +109,7 @@ export default async function InterviewSessionPage({ params }: SessionPageProps)
           sessionId={sessionId}
           systemPrompt={systemPrompt}
           openingMessage={openingMessage}
+          initialMessages={initialMessages}
         />
       </div>
     </div>

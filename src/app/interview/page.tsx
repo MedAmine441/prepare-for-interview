@@ -2,11 +2,15 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Play, Check, History, Loader2 } from "lucide-react";
-import { startInterview } from "@/actions/interview.actions";
+import { Play, Check, History, Loader2, MessageSquare, X } from "lucide-react";
+import {
+  startInterview,
+  getResumableSession,
+  abandonInterview,
+} from "@/actions/interview.actions";
 import { CATEGORY_METADATA } from "@/lib/constants/categories";
 import { getCategoryEmoji } from "@/lib/utils/question-format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +27,27 @@ export default function InterviewSetupPage() {
   const [maxQuestions, setMaxQuestions] = useState(5);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [resumable, setResumable] = useState<{
+    sessionId: string;
+    startedAt: string;
+    topicLabel: string;
+    messageCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    getResumableSession()
+      .then((result) => {
+        if (result.success) setResumable(result.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleDiscardResumable = async () => {
+    if (!resumable) return;
+    const id = resumable.sessionId;
+    setResumable(null);
+    await abandonInterview(id).catch(() => {});
+  };
 
   const handleCategoryToggle = (category: QuestionCategory) => {
     setSelectedCategories((prev) =>
@@ -73,6 +98,31 @@ export default function InterviewSetupPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Unfinished interview — resume or discard */}
+      {resumable && (
+        <div className="mb-6 rounded-lg border border-primary/30 bg-primary/[.06] p-4 flex items-center gap-3">
+          <MessageSquare className="w-4 h-4 text-primary shrink-0" />
+          <div className="flex-1 min-w-0 text-sm">
+            <span className="font-medium">Unfinished interview</span>{" "}
+            <span className="text-muted-foreground">
+              on {resumable.topicLabel} · {resumable.messageCount} messages ·{" "}
+              {formatWhen(resumable.startedAt)}
+            </span>
+          </div>
+          <Button asChild size="sm">
+            <Link href={`/interview/${resumable.sessionId}`}>Resume</Link>
+          </Button>
+          <button
+            onClick={handleDiscardResumable}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Discard this interview"
+            aria-label="Discard unfinished interview"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="space-y-8">
         {/* Topics */}
@@ -228,5 +278,14 @@ export default function InterviewSetupPage() {
       </div>
     </div>
   );
+}
+
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 

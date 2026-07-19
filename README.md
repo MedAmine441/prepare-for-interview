@@ -78,6 +78,7 @@ Interview → pick topics, difficulty, question source, and count → the AI int
 | `npm test` | Run the vitest suite (SM-2 algorithm + repositories, against a throwaway db) |
 | `npm run seed` | Add seed questions to `data/frontmaster.db` (idempotent — existing questions and your progress are kept) |
 | `npm run seed:clear` | Remove seed questions and **all study progress**, then reseed fresh |
+| `npm run restore -- <file>` | Restore a JSON backup downloaded via the **Backup** button (upserts by id) |
 
 ## Your Data
 
@@ -85,7 +86,7 @@ All state lives in a SQLite database at `data/frontmaster.db` — questions, spa
 
 - Re-running `npm run seed` is safe — it only adds missing seed questions.
 - To start completely fresh, delete `data/frontmaster.db` (and its `-wal`/`-shm` sidecars) and run `npm run seed` again, or use `npm run seed:clear`.
-- Questions you add via the UI ("Add Question" / "Generate with AI") live only in the database — back up `data/frontmaster.db` if you want to keep them.
+- Questions you add via the UI ("Add Question" / "Generate with AI") live only in the database — use the **Backup** button on the Questions page (downloads a full JSON backup: questions, progress, interview history) and `npm run restore -- <file>` to bring one back.
 - Inspect it with any SQLite client: `sqlite3 data/frontmaster.db 'SELECT category, COUNT(*) FROM questions GROUP BY category'`.
 
 ### Adding to the question bank

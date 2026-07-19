@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Clock, Loader2, Plus } from "lucide-react";
+import { ChevronRight, Clock, Download, Loader2, Plus } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { CategoryFilter } from "@/components/shared/CategoryFilter";
 import { DifficultyFilter } from "@/components/shared/DifficultyFilter";
@@ -143,12 +143,24 @@ function QuestionsPageContent() {
             Browse all interview questions in the library.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/flashcards/new">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Question
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <a
+              href="/api/backup"
+              download
+              title="Download a full JSON backup — questions, progress, and interview history"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Backup
+            </a>
+          </Button>
+          <Button asChild>
+            <Link href="/flashcards/new">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Question
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* AI generation */}

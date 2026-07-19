@@ -9,7 +9,8 @@ A local-first study app for frontend interview preparation:
 - **The interview feeds your studying** — ending an interview analyzes the transcript, marks the questions you struggled with as due reviews, and offers a one-click cram session over exactly those cards; every session's transcript and debrief stay browsable under Past Sessions
 - **Interview-date countdown** — set your real interview date and the home page turns your backlog into a daily plan
 - **AI question generation** — grow the bank on demand, in your chosen category and difficulty
-- **~96 curated questions** across 15 categories: JavaScript fundamentals, React patterns & internals, TypeScript, web performance, system design, CSS, security, accessibility, testing, behavioral/STAR stories, and more
+- **Coding challenges** — implement debounce, Promise.all, EventEmitter & co. from scratch in a code editor; the AI reviews your implementation against a rubric like a live coding round
+- **~106 curated questions** across 16 categories: JavaScript fundamentals, React patterns & internals, TypeScript, web performance, system design, CSS, security, accessibility, testing, behavioral/STAR stories, coding challenges, and more
 
 Built with Next.js 15, TypeScript, Tailwind CSS, and a local SQLite database (via Node's built-in `node:sqlite` — no native build step). Everything runs and stays on your machine.
 
@@ -41,7 +42,8 @@ cp .env.example .env.local
 
 ## How to Study
 
-- **Review due** (default) — spaced repetition. Rate each card honestly; the SM-2 algorithm schedules the next review (the real intervals are shown on the rating buttons). Cards you fail come back sooner; cards you know drift out to weeks.
+- **Review due** (default) — spaced repetition. Rate each card honestly; the SM-2 algorithm schedules the next review (the real intervals are shown on the rating buttons). Cards you fail come back sooner; cards you know drift out to weeks. Cards rated **Again** also come back within the same session after a few other cards.
+- **Daily new-card budget** — the queue introduces at most N new cards per day (the countdown's pace when your interview date is set, 10 otherwise), interleaved across categories. Reviews are never limited, and neither is Practice mode.
 - **Practice all** — cramming before an interview. Every matching card, shuffled, schedule untouched. "Repeat later" sends a card to the back of the deck.
 - **Type answers** (toggle in the study header) — type your answer from memory before revealing. The AI checks it against each key point (✓ covered / ✗ missed) and highlights a suggested rating. Honest self-rating without the overconfidence.
 - The card back shows a concise **Quick Answer** (the key points); expand **Show full answer** for the deep dive.

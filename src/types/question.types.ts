@@ -35,6 +35,7 @@ export const QUESTION_CATEGORIES = {
   REACT_INTERNALS: 'react-internals',
   BEHAVIORAL: 'behavioral',
   TESTING: 'testing',
+  CODING_CHALLENGES: 'coding-challenges',
 } as const;
 
 export type QuestionCategory = typeof QUESTION_CATEGORIES[keyof typeof QUESTION_CATEGORIES];

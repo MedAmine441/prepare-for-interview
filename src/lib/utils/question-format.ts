@@ -31,6 +31,7 @@ export function getCategoryEmoji(slug: string): string {
     'react-internals': '⚛️',
     behavioral: '🗣️',
     testing: '🧪',
+    'coding-challenges': '💻',
   };
   return emojiMap[slug] || '📚';
 }

@@ -142,6 +142,15 @@ export const CATEGORY_METADATA: Record<QuestionCategory, CategoryMetadata> = {
     icon: 'FlaskConical',
     color: 'bg-lime-600',
   },
+  [QUESTION_CATEGORIES.CODING_CHALLENGES]: {
+    id: createCategoryId('coding-challenges'),
+    slug: QUESTION_CATEGORIES.CODING_CHALLENGES,
+    name: 'Coding Challenges',
+    description:
+      'Implement-from-scratch JavaScript: debounce, promises, event emitters, currying — type your solution and get it reviewed like a live coding round.',
+    icon: 'Code2',
+    color: 'bg-slate-700',
+  },
 };
 
 /**

@@ -72,7 +72,34 @@ export async function evaluateTypedAnswer(
       return { success: false, error: "Question not found" };
     }
 
-    const prompt = `You are grading a frontend interview flashcard answer that the candidate typed from memory.
+    const jsonShape = `{
+  "keyPointsCovered": [${question.keyPoints.map(() => "true|false").join(", ")}],
+  "feedback": "1-2 sentences: what was good, then the single most important gap",
+  "suggestedRating": "again|hard|good|easy"
+}`;
+
+    const prompt =
+      question.category === "coding-challenges"
+        ? `You are reviewing a candidate's code from a live frontend coding round.
+
+## The task
+${question.question}
+
+## Review rubric — what a strong solution demonstrates
+${question.keyPoints.map((p, i) => `${i + 1}. ${p}`).join("\n")}
+
+## Candidate's solution
+"""
+${input.data.typedAnswer}
+"""
+
+Trace the code mentally and judge whether it actually demonstrates each rubric point — don't trust comments or claims. Style differences are fine; wrong behavior is not. Rubric points about *explaining* something count as covered if the code or its comments show the understanding.
+
+Respond with ONLY a JSON object (no markdown fences, no commentary):
+${jsonShape}
+
+Rating rubric: "again" = doesn't work or wrong approach; "hard" = partially works, misses key edge cases; "good" = correct with minor gaps; "easy" = correct, idiomatic, edge cases handled. keyPointsCovered must have exactly ${question.keyPoints.length} entries, in rubric order.`
+        : `You are grading a frontend interview flashcard answer that the candidate typed from memory.
 
 ## Question
 ${question.question}
@@ -88,11 +115,7 @@ ${input.data.typedAnswer}
 Grade on meaning, not wording — accept synonyms, shorthand, and code fragments. A key point counts as covered if its core idea is clearly present.
 
 Respond with ONLY a JSON object (no markdown fences, no commentary):
-{
-  "keyPointsCovered": [${question.keyPoints.map(() => "true|false").join(", ")}],
-  "feedback": "1-2 sentences: what was good, then the single most important gap",
-  "suggestedRating": "again|hard|good|easy"
-}
+${jsonShape}
 
 Rating rubric: "again" = fundamentally wrong or off-topic; "hard" = big gaps, under half the key points; "good" = solid with minor gaps; "easy" = complete and precise. keyPointsCovered must have exactly ${question.keyPoints.length} entries, in the same order as the key points above.`;
 

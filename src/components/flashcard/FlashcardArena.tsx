@@ -89,6 +89,13 @@ const ANSWER_TARGET_SECONDS: Record<Difficulty, number> = {
   senior: 120,
 };
 
+/** Writing an implementation takes longer than recalling a concept */
+const CODING_TARGET_SECONDS: Record<Difficulty, number> = {
+  junior: 300,
+  mid: 480,
+  senior: 600,
+};
+
 function formatElapsed(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -616,11 +623,14 @@ export function FlashcardArena({
   if (!question) return null;
 
   const previews = currentCard?.intervalPreviews;
+  const isCoding = question.category === "coding-challenges";
   const elapsedSeconds = Math.max(
     0,
     Math.floor(((revealedAt ?? nowTick) - startTime) / 1000),
   );
-  const targetSeconds = ANSWER_TARGET_SECONDS[question.difficulty];
+  const targetSeconds = isCoding
+    ? CODING_TARGET_SECONDS[question.difficulty]
+    : ANSWER_TARGET_SECONDS[question.difficulty];
   const timerColor =
     elapsedSeconds > targetSeconds * 2
       ? "text-red-600 dark:text-red-400"
@@ -718,7 +728,8 @@ export function FlashcardArena({
               )
             ) : typeMode ? (
               <>
-                <span className="kbd">Enter</span> to grade
+                <span className="kbd">{isCoding ? "Ctrl+Enter" : "Enter"}</span>{" "}
+                to grade
               </>
             ) : (
               <>
@@ -766,15 +777,43 @@ export function FlashcardArena({
                     value={typedAnswer}
                     onChange={(e) => setTypedAnswer(e.target.value)}
                     onKeyDown={(e) => {
+                      // Coding: Enter = newline, Ctrl+Enter = submit, Tab = indent
+                      if (isCoding) {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault();
+                          handleTypedSubmit();
+                        } else if (e.key === "Tab") {
+                          e.preventDefault();
+                          const el = e.currentTarget;
+                          const start = el.selectionStart;
+                          const end = el.selectionEnd;
+                          setTypedAnswer(
+                            typedAnswer.slice(0, start) +
+                              "  " +
+                              typedAnswer.slice(end),
+                          );
+                          requestAnimationFrame(() => {
+                            el.selectionStart = el.selectionEnd = start + 2;
+                          });
+                        }
+                        return;
+                      }
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleTypedSubmit();
                       }
                     }}
-                    placeholder="Answer from memory... (Shift+Enter for a new line)"
-                    rows={5}
+                    placeholder={
+                      isCoding
+                        ? "Write your implementation... (Ctrl+Enter to submit)"
+                        : "Answer from memory... (Shift+Enter for a new line)"
+                    }
+                    rows={isCoding ? 12 : 5}
                     disabled={isFlipped}
-                    className="w-full p-3 rounded-lg border bg-background resize-none text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary"
+                    className={`w-full p-3 rounded-lg border bg-background resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary ${
+                      isCoding ? "font-mono text-xs" : "text-sm"
+                    }`}
+                    spellCheck={!isCoding}
                   />
                   <div className="flex items-center justify-between mt-3">
                     <button
@@ -789,7 +828,7 @@ export function FlashcardArena({
                       disabled={!typedAnswer.trim()}
                     >
                       <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                      Grade my answer
+                      {isCoding ? "Review my code" : "Grade my answer"}
                     </Button>
                   </div>
                 </>

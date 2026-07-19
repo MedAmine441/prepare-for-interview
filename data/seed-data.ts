@@ -38,6 +38,7 @@ import { typescriptQuestions } from "./typescript-questions";
 import { webPerformanceQuestions } from "./web-performance-questions";
 import { behavioralQuestions } from "./behavioral-questions";
 import { testingQuestions } from "./testing-questions";
+import { codingChallengesQuestions } from "./coding-challenges-questions";
 
 // Export all questions combined.
 // NOTE: seed ids are per-category counters over this array's order —
@@ -58,6 +59,7 @@ export const ALL_SEED_QUESTIONS: CreateQuestionInput[] = [
   ...webPerformanceQuestions,
   ...behavioralQuestions,
   ...testingQuestions,
+  ...codingChallengesQuestions,
 ];
 
 // Export individual categories for selective seeding
@@ -77,4 +79,5 @@ export {
   webPerformanceQuestions,
   behavioralQuestions,
   testingQuestions,
+  codingChallengesQuestions,
 };

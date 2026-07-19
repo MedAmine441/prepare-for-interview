@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -17,10 +17,12 @@ import {
 import type {
   QuestionCategory,
   Question,
+  QuestionProgress,
   SM2Quality,
   Difficulty,
 } from "@/types";
 import { QUALITY_BUTTONS } from "@/types";
+import { getIntervalPreviews } from "@/lib/algorithms/sm2";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
 import {
   getNextStudyCard,
@@ -93,6 +95,22 @@ function formatElapsed(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * In-session relearn queue (review mode): a card rated "Again" comes back
+ * after a few other cards instead of disappearing until tomorrow —
+ * failed material is best re-tested minutes later, Anki-style.
+ */
+interface RelearnEntry {
+  question: Question;
+  /** Progress right after the failed review — previews derive from it */
+  progress: QuestionProgress;
+  /** Card loads until re-shown (decremented on every next-card load) */
+  gap: number;
+}
+
+/** 4 loads = 3 other cards seen between the failure and the retry */
+const RELEARN_GAP = 4;
+
 export function FlashcardArena({
   category,
   difficulty,
@@ -140,7 +158,10 @@ export function FlashcardArena({
     question: Question;
     isNew: boolean;
     intervalPreviews: Record<SM2Quality, string> | null;
+    relearn?: boolean;
   } | null>(null);
+  const relearnRef = useRef<RelearnEntry[]>([]);
+  const [relearnCount, setRelearnCount] = useState(0);
   const [remaining, setRemaining] = useState<{
     review: number;
     new: number;
@@ -154,6 +175,18 @@ export function FlashcardArena({
   const question =
     mode === "practice" ? deck[deckIndex] ?? null : currentCard?.question ?? null;
 
+  const serveRelearnCard = useCallback((entry: RelearnEntry) => {
+    setRelearnCount(relearnRef.current.length);
+    setCurrentCard({
+      question: entry.question,
+      isNew: false,
+      intervalPreviews: getIntervalPreviews(entry.progress.sm2),
+      relearn: true,
+    });
+    setStartTime(Date.now());
+    setCardCount((prev) => prev + 1);
+  }, []);
+
   const loadNextReviewCard = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -162,6 +195,21 @@ export function FlashcardArena({
     setTypedAnswer("");
     setEvalState(null);
     setRevealedAt(null);
+
+    // A failed card whose spacing gap has elapsed takes priority
+    if (relearnRef.current.length > 0) {
+      relearnRef.current = relearnRef.current.map((e) => ({
+        ...e,
+        gap: e.gap - 1,
+      }));
+      const readyIndex = relearnRef.current.findIndex((e) => e.gap <= 0);
+      if (readyIndex !== -1) {
+        const [entry] = relearnRef.current.splice(readyIndex, 1);
+        serveRelearnCard(entry);
+        setIsLoading(false);
+        return;
+      }
+    }
 
     try {
       const [result, stats] = await Promise.all([
@@ -183,6 +231,12 @@ export function FlashcardArena({
       }
 
       if (!result.data) {
+        // Flush waiting relearn cards before ending the session
+        const entry = relearnRef.current.shift();
+        if (entry) {
+          serveRelearnCard(entry);
+          return;
+        }
         setSessionComplete(true);
         return;
       }
@@ -200,7 +254,7 @@ export function FlashcardArena({
     } finally {
       setIsLoading(false);
     }
-  }, [category, difficulty]);
+  }, [category, difficulty, serveRelearnCard]);
 
   const loadPracticeDeck = useCallback(async () => {
     setIsLoading(true);
@@ -249,6 +303,8 @@ export function FlashcardArena({
     setSessionComplete(false);
     setCardCount(0);
     setTally(EMPTY_TALLY);
+    relearnRef.current = [];
+    setRelearnCount(0);
     if (mode === "practice") {
       loadPracticeDeck();
     } else {
@@ -333,6 +389,19 @@ export function FlashcardArena({
           easy: t.easy + (quality === QUALITY_BUTTONS.EASY ? 1 : 0),
         }));
 
+        // "Again" cards come back later in this session, Anki-style
+        if (quality === QUALITY_BUTTONS.AGAIN) {
+          relearnRef.current = [
+            ...relearnRef.current,
+            {
+              question: currentCard.question,
+              progress: result.data.updatedProgress,
+              gap: RELEARN_GAP,
+            },
+          ];
+          setRelearnCount(relearnRef.current.length);
+        }
+
         await loadNextReviewCard();
       } catch (err) {
         setError("Failed to save answer. Please try again.");
@@ -381,6 +450,8 @@ export function FlashcardArena({
     setSessionComplete(false);
     setCardCount(0);
     setTally(EMPTY_TALLY);
+    relearnRef.current = [];
+    setRelearnCount(0);
     if (mode === "practice") {
       loadPracticeDeck();
     } else {
@@ -586,12 +657,27 @@ export function FlashcardArena({
                     {remaining.quota.introducedToday}/{remaining.quota.limit}
                   </span>{" "}
                   today
+                  {relearnCount > 0 && (
+                    <span className="text-orange-600 dark:text-orange-400">
+                      {" "}
+                      · {relearnCount} to relearn
+                    </span>
+                  )}
                 </span>
               )}
               {currentCard?.isNew && (
                 <Badge variant="secondary" className="text-xs">
                   <Sparkles className="w-3 h-3 mr-1" />
                   New
+                </Badge>
+              )}
+              {currentCard?.relearn && (
+                <Badge
+                  variant="outline"
+                  className="text-xs text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-900"
+                >
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  Relearn
                 </Badge>
               )}
             </>

@@ -31,17 +31,18 @@ export function Navbar() {
         <div className="flex h-14 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <Logo size={28} />
-            <span className="font-semibold text-lg tracking-tight">
+            {/* The wordmark doesn't fit next to four links on phones */}
+            <span className="hidden sm:inline font-semibold text-lg tracking-tight">
               Front<span className="text-gradient">Master</span>
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 sm:gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+                className={`px-1.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm whitespace-nowrap transition-colors ${
                   isActive(item.href)
                     ? "bg-accent text-accent-foreground font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"

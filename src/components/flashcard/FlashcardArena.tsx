@@ -930,7 +930,7 @@ export function FlashcardArena({
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTypeMode}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium whitespace-nowrap transition-colors ${
               typeMode
                 ? "bg-primary/10 border-primary/30 text-primary"
                 : "border-border text-muted-foreground hover:bg-secondary/50"

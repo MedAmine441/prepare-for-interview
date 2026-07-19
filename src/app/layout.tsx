@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/shared/Navbar";
@@ -12,7 +12,22 @@ export const metadata: Metadata = {
   description: "Master frontend interviews with spaced repetition",
   icons: {
     icon: "/favicon.svg",
+    apple: "/apple-touch-icon.png",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "FrontMaster",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fcfcfd" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d0d16" },
+  ],
 };
 
 // Apply saved theme before first paint to avoid a flash of the wrong theme
@@ -24,6 +39,15 @@ const themeInitScript = `
     if (dark) document.documentElement.classList.add('dark');
   } catch (e) {}
 })();
+`;
+
+// PWA installability — the worker is a pure passthrough (no caching)
+const swRegisterScript = `
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}
 `;
 
 export default function RootLayout({
@@ -41,6 +65,7 @@ export default function RootLayout({
           <Navbar />
           <main className="flex-1">{children}</main>
         </div>
+        <script dangerouslySetInnerHTML={{ __html: swRegisterScript }} />
       </body>
     </html>
   );

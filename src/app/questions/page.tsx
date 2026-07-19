@@ -136,7 +136,7 @@ function QuestionsPageContent() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight mb-2">Questions</h1>
           <p className="text-muted-foreground">

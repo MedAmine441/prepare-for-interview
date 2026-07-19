@@ -35,7 +35,7 @@ export default async function HomePage() {
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
       {/* Hero */}
-      <section className="relative text-center mb-16 pt-6 pb-2">
+      <section className="relative overflow-x-clip text-center mb-16 pt-6 pb-2">
         <div className="absolute -inset-x-8 -top-12 bottom-0 -z-10 bg-dots" aria-hidden />
         <p className="font-mono text-xs text-primary tracking-widest mb-5">
           {"<frontmaster />"} — spaced repetition for engineers
@@ -47,7 +47,7 @@ export default async function HomePage() {
           Study with spaced repetition flashcards. Practice with AI mock interviews.
           Build real confidence.
         </p>
-        <div className="flex gap-3 justify-center">
+        <div className="flex flex-wrap gap-3 justify-center">
           <Button asChild size="lg" className="shadow-lg shadow-primary/25">
             <Link href="/flashcards/study">
               <BookOpen className="w-4 h-4 mr-2" />

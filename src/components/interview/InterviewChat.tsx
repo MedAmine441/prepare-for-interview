@@ -56,6 +56,9 @@ declare global {
 
 const VOICE_MODE_STORAGE_KEY = 'fm-voice-mode';
 
+/** Silence gap after which a dictated answer sends itself */
+const VOICE_AUTOSEND_MS = 2000;
+
 /** Make markdown listenable: drop code blocks and formatting characters */
 function stripForSpeech(markdown: string): string {
   return markdown
@@ -134,6 +137,17 @@ export function InterviewChat({
     setVoiceMode(localStorage.getItem(VOICE_MODE_STORAGE_KEY) === '1');
   }, []);
 
+  // Auto-send: speech resets the timer, ~2s of silence submits the answer
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSendRef = useRef<() => void>(() => {});
+
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
   const ensureRecognition = useCallback((): SpeechRecognitionLike | null => {
     if (recognitionRef.current) return recognitionRef.current;
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -157,6 +171,14 @@ export function InterviewChat({
         setInput((prev) => (prev ? `${prev} ` : '') + finalText.trim());
       }
       setInterim(interimText);
+
+      // Any speech resets the countdown; a finished segment arms it
+      clearSilenceTimer();
+      if (wantListeningRef.current && !interimText) {
+        silenceTimerRef.current = setTimeout(() => {
+          autoSendRef.current();
+        }, VOICE_AUTOSEND_MS);
+      }
     };
     rec.onend = () => {
       setIsListening(false);
@@ -179,7 +201,7 @@ export function InterviewChat({
     };
     recognitionRef.current = rec;
     return rec;
-  }, []);
+  }, [clearSilenceTimer]);
 
   const startListening = useCallback(() => {
     const rec = ensureRecognition();
@@ -197,10 +219,11 @@ export function InterviewChat({
   const stopListening = useCallback(() => {
     wantListeningRef.current = false;
     pausedForSpeechRef.current = false;
+    clearSilenceTimer();
     recognitionRef.current?.stop();
     setIsListening(false);
     setInterim('');
-  }, []);
+  }, [clearSilenceTimer]);
 
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -209,6 +232,7 @@ export function InterviewChat({
     utterance.rate = 1.05;
     // Mute the mic while the interviewer talks so it doesn't hear itself
     utterance.onstart = () => {
+      clearSilenceTimer();
       if (wantListeningRef.current && recognitionRef.current) {
         pausedForSpeechRef.current = true;
         recognitionRef.current.stop();
@@ -228,7 +252,7 @@ export function InterviewChat({
       }
     };
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [clearSilenceTimer]);
 
   // Read each new interviewer message aloud in voice mode
   useEffect(() => {
@@ -260,6 +284,7 @@ export function InterviewChat({
   useEffect(() => {
     return () => {
       wantListeningRef.current = false;
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognitionRef.current?.stop();
       window.speechSynthesis?.cancel();
     };
@@ -405,12 +430,21 @@ export function InterviewChat({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const sendCurrentInput = useCallback(async () => {
     if (!input.trim() || isLoading || hasEnded) return;
     const content = input.trim();
     setInput('');
     await sendToModel(messages, content);
+  }, [input, isLoading, hasEnded, messages, sendToModel]);
+
+  // The recognition callback outlives renders — keep the sender fresh
+  useEffect(() => {
+    autoSendRef.current = sendCurrentInput;
+  }, [sendCurrentInput]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await sendCurrentInput();
   };
 
   const handleEndInterview = async () => {
@@ -569,7 +603,11 @@ export function InterviewChat({
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Manual edits shouldn't get auto-sent mid-thought
+                  clearSilenceTimer();
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   voiceMode
@@ -623,7 +661,8 @@ export function InterviewChat({
                 {!speechSupported
                   ? 'Speech recognition is unavailable — check mic permissions (Chrome required).'
                   : isListening
-                    ? interim || 'Listening... speak your answer, then hit send.'
+                    ? interim ||
+                      'Listening... pause for ~2s and your answer sends itself.'
                     : 'Voice mode on — tap the mic to answer out loud.'}
               </p>
             )}

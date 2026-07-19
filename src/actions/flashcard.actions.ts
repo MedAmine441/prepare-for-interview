@@ -11,6 +11,7 @@ import {
   calculateSM2,
   getIntervalPreviews,
   formatInterval,
+  isLeech,
 } from "@/lib/algorithms/sm2";
 import type {
   Question,
@@ -87,6 +88,8 @@ export async function getNextStudyCard(
     progress: QuestionProgress;
     intervalPreviews: Record<SM2Quality, string>;
     isNew: boolean;
+    /** Failed 4+ times — probably a badly written card, worth editing */
+    isLeech: boolean;
   } | null>
 > {
   try {
@@ -154,7 +157,13 @@ export async function getNextStudyCard(
 
     return {
       success: true,
-      data: { question, progress, intervalPreviews, isNew },
+      data: {
+        question,
+        progress,
+        intervalPreviews,
+        isNew,
+        isLeech: isLeech(progress.reviewHistory),
+      },
     };
   } catch (error) {
     console.error("Error getting next study card:", error);
@@ -395,6 +404,24 @@ export async function getQuestionStatusMap(): Promise<
   } catch (error) {
     console.error("Error getting status map:", error);
     return { success: false, error: "Failed to get study statuses" };
+  }
+}
+
+/**
+ * Questions failed LEECH_THRESHOLD+ times — candidates for rewriting.
+ */
+export async function getLeechQuestionIds(): Promise<ActionResult<string[]>> {
+  try {
+    const progress = await progressRepository.findAll();
+    return {
+      success: true,
+      data: progress
+        .filter((p) => isLeech(p.reviewHistory))
+        .map((p) => p.questionId as string),
+    };
+  } catch (error) {
+    console.error("Error getting leeches:", error);
+    return { success: false, error: "Failed to get leeches" };
   }
 }
 

@@ -10,7 +10,11 @@ import { SearchInput } from "@/components/shared/SearchInput";
 import { CategoryFilter } from "@/components/shared/CategoryFilter";
 import { DifficultyFilter } from "@/components/shared/DifficultyFilter";
 import { getQuestions } from "@/actions/question.actions";
-import { getQuestionStatusMap, type StudyStatus } from "@/actions/flashcard.actions";
+import {
+  getQuestionStatusMap,
+  getLeechQuestionIds,
+  type StudyStatus,
+} from "@/actions/flashcard.actions";
 import { GeneratePanel } from "@/components/questions/GeneratePanel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +51,7 @@ function QuestionsPageContent() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, StudyStatus>>({});
+  const [leechIds, setLeechIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,9 +106,10 @@ function QuestionsPageContent() {
     setError(null);
 
     try {
-      const [result, statuses] = await Promise.all([
+      const [result, statuses, leeches] = await Promise.all([
         getQuestions(),
         getQuestionStatusMap(),
+        getLeechQuestionIds(),
       ]);
 
       if (!result.success) {
@@ -115,6 +121,9 @@ function QuestionsPageContent() {
       setFilteredQuestions(result.data);
       if (statuses.success) {
         setStatusMap(statuses.data);
+      }
+      if (leeches.success) {
+        setLeechIds(new Set(leeches.data));
       }
     } catch (err) {
       setError("Failed to load questions");
@@ -218,6 +227,7 @@ function QuestionsPageContent() {
               key={question.id}
               question={question}
               status={statusMap[question.id] ?? "new"}
+              isLeech={leechIds.has(question.id)}
             />
           ))}
         </div>
@@ -242,7 +252,15 @@ const STATUS_STYLES: Record<StudyStatus, { label: string; className: string }> =
   },
 };
 
-function QuestionRow({ question, status }: { question: Question; status: StudyStatus }) {
+function QuestionRow({
+  question,
+  status,
+  isLeech,
+}: {
+  question: Question;
+  status: StudyStatus;
+  isLeech: boolean;
+}) {
   return (
     <Link href={`/questions/${question.id}`} className="block group">
       <Card className="transition-colors hover:bg-secondary/50">
@@ -268,6 +286,15 @@ function QuestionRow({ question, status }: { question: Question; status: StudySt
                 >
                   {STATUS_STYLES[status].label}
                 </Badge>
+                {isLeech && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal text-red-600 border-red-300 dark:text-red-400 dark:border-red-900"
+                    title="Failed repeatedly — consider rewriting this card"
+                  >
+                    Leech
+                  </Badge>
+                )}
                 {question.source === "ai-generated" && (
                   <Badge variant="outline" className="text-xs font-normal text-purple-600 border-purple-300 dark:text-purple-400 dark:border-purple-900">
                     AI

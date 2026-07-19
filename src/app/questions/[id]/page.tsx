@@ -2,9 +2,20 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, ChevronDown, ChevronRight, Clock, ArrowLeft } from "lucide-react";
+import {
+  Bug,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  ArrowLeft,
+} from "lucide-react";
 import { MarkdownRenderer } from "@/components/shared/MarkdownRenderer";
+import { QuestionAdmin } from "@/components/questions/QuestionAdmin";
 import { getQuestionById } from "@/actions/question.actions";
+import { progressRepository } from "@/lib/db/repositories";
+import { countLapses, LEECH_THRESHOLD } from "@/lib/algorithms/sm2";
+import { createQuestionId } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +26,8 @@ import {
   getDifficultyColor,
   getEstimatedTime,
 } from "@/lib/utils/question-format";
+
+export const dynamic = "force-dynamic";
 
 interface QuestionPageProps {
   params: Promise<{
@@ -49,6 +62,12 @@ export default async function QuestionDetailPage({ params }: QuestionPageProps) 
     notFound();
   }
 
+  const progress = await progressRepository.findByQuestionId(
+    createQuestionId(id),
+  );
+  const lapses = progress ? countLapses(progress.reviewHistory) : 0;
+  const leech = lapses >= LEECH_THRESHOLD;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       {/* Breadcrumb */}
@@ -79,7 +98,33 @@ export default async function QuestionDetailPage({ params }: QuestionPageProps) 
               {formatSource(question.source)}
             </Badge>
           )}
+          {question.isArchived && (
+            <Badge variant="outline" className="text-xs">
+              Archived
+            </Badge>
+          )}
         </div>
+      </div>
+
+      {/* Leech warning — repeated failure usually means a badly written card */}
+      {leech && (
+        <div className="mb-6 rounded-lg border border-orange-500/30 bg-orange-500/[.06] p-4">
+          <p className="text-sm font-medium text-orange-700 dark:text-orange-400 mb-1">
+            <Bug className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Leech — failed {lapses} times
+          </p>
+          <p className="text-sm text-muted-foreground">
+            When a card keeps failing, the card is usually the problem, not
+            your memory. Try splitting it into smaller cards, rewording the
+            key points so each stands alone, or archiving it if it isn&apos;t
+            worth the grind.
+          </p>
+        </div>
+      )}
+
+      {/* Manage */}
+      <div className="mb-8">
+        <QuestionAdmin question={question} />
       </div>
 
       {/* Quick Answer — the concise, studyable version */}

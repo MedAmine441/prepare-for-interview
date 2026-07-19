@@ -9,6 +9,9 @@ import {
   getDueCards,
   formatInterval,
   isDue,
+  countLapses,
+  isLeech,
+  LEECH_THRESHOLD,
 } from "@/lib/algorithms/sm2";
 import { createEaseFactor, createQuestionId } from "@/types";
 import type { SM2State, SM2Quality } from "@/types";
@@ -142,6 +145,32 @@ describe("getMasteryLevel", () => {
     expect(getMasteryLevel(state({ repetitions: 5, interval: 45 }))).toBe(
       "mastered",
     );
+  });
+});
+
+describe("leech detection", () => {
+  const review = (quality: number) => ({
+    date: "2026-07-19T00:00:00.000Z",
+    quality: quality as SM2Quality,
+    responseTimeMs: 1000,
+    wasRevealed: true,
+  });
+
+  test("counts only failing reviews (quality < 3) as lapses", () => {
+    const history = [review(0), review(4), review(2), review(5), review(1)];
+    expect(countLapses(history)).toBe(3);
+  });
+
+  test("becomes a leech at the threshold, not before", () => {
+    const fails = Array.from({ length: LEECH_THRESHOLD - 1 }, () => review(0));
+    expect(isLeech(fails)).toBe(false);
+    expect(isLeech([...fails, review(2)])).toBe(true);
+    expect(isLeech([])).toBe(false);
+  });
+
+  test("passing reviews never make a leech", () => {
+    const passes = Array.from({ length: 20 }, () => review(4));
+    expect(isLeech(passes)).toBe(false);
   });
 });
 

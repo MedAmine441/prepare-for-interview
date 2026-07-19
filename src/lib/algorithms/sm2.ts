@@ -6,6 +6,7 @@ import type {
   SM2CalculationResult,
   EaseFactor,
   QuestionId,
+  ReviewRecord,
 } from "@/types";
 import { DEFAULT_SM2_STATE, createEaseFactor } from "@/types";
 
@@ -225,6 +226,22 @@ export function getMasteryLevel(
   } else {
     return "mastered";
   }
+}
+
+/**
+ * Leech detection (Anki-style, lower threshold): a card failed this many
+ * times isn't a memory problem — it's usually a badly written card that
+ * needs rewording or splitting.
+ */
+export const LEECH_THRESHOLD = 4;
+
+/** Number of failed reviews (quality < 3) in a card's history */
+export function countLapses(history: ReviewRecord[]): number {
+  return history.filter((r) => r.quality < PASSING_QUALITY).length;
+}
+
+export function isLeech(history: ReviewRecord[]): boolean {
+  return countLapses(history) >= LEECH_THRESHOLD;
 }
 
 /**

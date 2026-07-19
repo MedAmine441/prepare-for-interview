@@ -239,6 +239,33 @@ export async function archiveQuestion(
 }
 
 /**
+ * Restore an archived question
+ */
+export async function restoreQuestion(
+  id: string
+): Promise<ActionResult<void>> {
+  try {
+    const question = await questionRepository.update({
+      id: createQuestionId(id),
+      isArchived: false,
+    });
+
+    if (!question) {
+      return { success: false, error: 'Question not found' };
+    }
+
+    revalidatePath('/questions');
+    revalidatePath(`/questions/${id}`);
+    revalidatePath('/flashcards');
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error('Error restoring question:', error);
+    return { success: false, error: 'Failed to restore question' };
+  }
+}
+
+/**
  * Permanently delete a question
  */
 export async function deleteQuestion(

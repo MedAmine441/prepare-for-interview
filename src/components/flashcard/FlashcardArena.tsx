@@ -166,6 +166,7 @@ export function FlashcardArena({
     isNew: boolean;
     intervalPreviews: Record<SM2Quality, string> | null;
     relearn?: boolean;
+    isLeech?: boolean;
   } | null>(null);
   const relearnRef = useRef<RelearnEntry[]>([]);
   const [relearnCount, setRelearnCount] = useState(0);
@@ -252,6 +253,7 @@ export function FlashcardArena({
         question: result.data.question,
         isNew: result.data.isNew,
         intervalPreviews: result.data.intervalPreviews,
+        isLeech: result.data.isLeech,
       });
       setStartTime(Date.now());
       setCardCount((prev) => prev + 1);
@@ -936,6 +938,20 @@ export function FlashcardArena({
                 <div className="mt-2 pt-3 border-t">
                   <MarkdownRenderer content={question.answer} />
                 </div>
+              )}
+
+              {/* A card that keeps failing is usually a badly written card */}
+              {currentCard?.isLeech && (
+                <p className="mt-3 pt-3 border-t text-xs text-orange-600 dark:text-orange-400">
+                  This card keeps failing (leech) —{" "}
+                  <Link
+                    href={`/questions/${question.id}`}
+                    className="underline hover:no-underline"
+                  >
+                    consider rewriting or splitting it
+                  </Link>
+                  .
+                </p>
               )}
             </CardContent>
           </Card>

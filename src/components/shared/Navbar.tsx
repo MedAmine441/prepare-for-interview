@@ -12,6 +12,7 @@ const navItems = [
   { href: "/flashcards", label: "Flashcards" },
   { href: "/interview", label: "Interview" },
   { href: "/questions", label: "Questions" },
+  { href: "/stats", label: "Stats" },
 ];
 
 export function Navbar() {

@@ -5,6 +5,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { questionRepository, progressRepository } from "@/lib/db/repositories";
+import { getMeta } from "@/lib/db";
+import { dailyNewLimit } from "@/lib/utils/pacing";
 import {
   calculateSM2,
   getIntervalPreviews,
@@ -43,6 +45,34 @@ const StartSessionSchema = z.object({
 type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+export interface NewCardQuota {
+  /** Today's new-card budget (paced by the interview date when set) */
+  limit: number;
+  /** Cards whose first-ever review happened today */
+  introducedToday: number;
+}
+
+/**
+ * The daily new-card budget is global (not per filter): it follows the
+ * countdown's pacing so the plan on the home page is what the queue serves.
+ */
+async function getNewCardQuota(): Promise<NewCardQuota> {
+  const [questions, progress] = await Promise.all([
+    questionRepository.findAll(),
+    progressRepository.findAll(),
+  ]);
+  const reviewed = progress.filter((p) => p.totalReviews > 0);
+  const unseenCount = Math.max(0, questions.length - reviewed.length);
+
+  const today = new Date().toISOString().split("T")[0];
+  const introducedToday = reviewed.filter((p) =>
+    p.reviewHistory[0]?.date.startsWith(today),
+  ).length;
+
+  const interviewDate = getMeta<string | null>("interviewDate", null);
+  return { limit: dailyNewLimit(interviewDate, unseenCount), introducedToday };
+}
 
 /**
  * Get the next card for study
@@ -99,8 +129,14 @@ export async function getNextStudyCard(
     } else if (dueTodayInCategory.length > 0) {
       nextQuestionId = dueTodayInCategory[0] as QuestionId;
     } else if (newCards.length > 0) {
-      nextQuestionId = newCards[0].id;
-      isNew = true;
+      const quota = await getNewCardQuota();
+      if (quota.introducedToday < quota.limit) {
+        // Random pick = interleaved introduction across categories,
+        // which beats studying one topic block at a time
+        nextQuestionId =
+          newCards[Math.floor(Math.random() * newCards.length)].id;
+        isNew = true;
+      }
     }
 
     if (!nextQuestionId) {
@@ -192,6 +228,7 @@ export async function getStudySessionStats(
     newCardsCount: number;
     reviewCardsCount: number;
     masteredCount: number;
+    newQuota: NewCardQuota;
   }>
 > {
   try {
@@ -230,6 +267,7 @@ export async function getStudySessionStats(
         reviewCardsCount:
           filteredDue.overdue.length + filteredDue.dueToday.length,
         masteredCount: filteredDue.upcoming.length,
+        newQuota: await getNewCardQuota(),
       },
     };
   } catch (error) {

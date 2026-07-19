@@ -144,6 +144,7 @@ export function FlashcardArena({
   const [remaining, setRemaining] = useState<{
     review: number;
     new: number;
+    quota: { limit: number; introducedToday: number };
   } | null>(null);
 
   // Practice mode state
@@ -177,6 +178,7 @@ export function FlashcardArena({
         setRemaining({
           review: stats.data.reviewCardsCount,
           new: stats.data.newCardsCount,
+          quota: stats.data.newQuota,
         });
       }
 
@@ -484,6 +486,11 @@ export function FlashcardArena({
   // Session complete
   if (sessionComplete) {
     const totalRated = tally.again + tally.hard + tally.good + tally.easy;
+    const quotaReached =
+      mode === "review" &&
+      remaining !== null &&
+      remaining.new > 0 &&
+      remaining.quota.introducedToday >= remaining.quota.limit;
     return (
       <div className="flex flex-col items-center justify-center py-20 max-w-md mx-auto text-center px-4">
         <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center mb-4">
@@ -495,9 +502,15 @@ export function FlashcardArena({
         <p className="text-sm text-muted-foreground mb-4">
           {cardCount > 0
             ? `You went through ${cardCount} card${cardCount > 1 ? "s" : ""}.`
-            : mode === "review"
+            : mode === "review" && !quotaReached
               ? "No cards due right now. Try Practice mode to cram everything."
-              : "No cards match this filter."}
+              : mode === "practice"
+                ? "No cards match this filter."
+                : ""}
+          {quotaReached &&
+            ` Today's ${remaining.quota.limit} new card${
+              remaining.quota.limit === 1 ? " is" : "s are"
+            } done — ${remaining.new} more unlock tomorrow. Practice mode is always unlimited.`}
         </p>
         {mode === "review" && totalRated > 0 && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground mb-6">
@@ -517,7 +530,7 @@ export function FlashcardArena({
         )}
         <div className="flex gap-3">
           <Button onClick={handleRestart}>Study Again</Button>
-          {mode === "review" && cardCount === 0 && (
+          {mode === "review" && (cardCount === 0 || quotaReached) && (
             <Button asChild variant="outline">
               <Link href={`/flashcards/study?mode=practice${category ? `&category=${category}` : ""}`}>
                 Practice All
@@ -568,7 +581,11 @@ export function FlashcardArena({
               </Badge>
               {remaining && (
                 <span className="text-xs text-muted-foreground">
-                  {remaining.review} to review · {remaining.new} new
+                  {remaining.review} to review · new{" "}
+                  <span className="font-mono tabular-nums">
+                    {remaining.quota.introducedToday}/{remaining.quota.limit}
+                  </span>{" "}
+                  today
                 </span>
               )}
               {currentCard?.isNew && (

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarClock, Pencil, X } from "lucide-react";
 import { setInterviewDate } from "@/actions/settings.actions";
+import { computeStudyPace, daysUntil } from "@/lib/utils/pacing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -119,10 +120,8 @@ export function InterviewCountdown({
     );
   }
 
-  // Pacing: clear the unseen backlog while leaving a few days pure-review
-  const reviewBuffer = daysLeft >= 10 ? 4 : daysLeft >= 5 ? 2 : 1;
-  const studyDays = Math.max(1, daysLeft - reviewBuffer);
-  const newPerDay = Math.ceil(newCount / studyDays);
+  // Same pacing the review queue enforces as its daily new-card budget
+  const { reviewBuffer, newPerDay } = computeStudyPace(daysLeft, newCount);
 
   return (
     <Card className="mb-12 max-w-2xl mx-auto overflow-hidden">
@@ -190,12 +189,4 @@ function todayString(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
     now.getDate(),
   ).padStart(2, "0")}`;
-}
-
-/** Whole days from today (local midnight) to the target date */
-function daysUntil(date: string): number {
-  const target = new Date(`${date}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }

@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   CheckCircle2,
   ChevronDown,
+  CornerDownRight,
   Loader2,
   PenLine,
   RotateCcw,
@@ -32,8 +33,11 @@ import {
 import { getQuestions } from "@/actions/question.actions";
 import {
   evaluateTypedAnswer,
+  evaluateFollowUpAnswer,
   type AnswerEvaluation,
   type SuggestedRating,
+  type FollowUpEvaluation,
+  type FollowUpVerdict,
 } from "@/actions/evaluate.actions";
 import {
   formatCategory,
@@ -118,6 +122,24 @@ interface RelearnEntry {
 /** 4 loads = 3 other cards seen between the failure and the retry */
 const RELEARN_GAP = 4;
 
+/**
+ * Follow-up drill (review mode): after a Good/Easy rating, occasionally
+ * ask one of the card's stored follow-up questions — interviews are won
+ * on the follow-up, not the opener.
+ */
+const DRILL_CHANCE = 1 / 3;
+
+type DrillState = {
+  question: Question;
+  followUp: string;
+  followUpIndex: number;
+} & (
+  | { phase: "answering" }
+  | { phase: "grading" }
+  | { phase: "done"; evaluation: FollowUpEvaluation }
+  | { phase: "error"; error: string }
+);
+
 export function FlashcardArena({
   category,
   difficulty,
@@ -170,6 +192,10 @@ export function FlashcardArena({
   } | null>(null);
   const relearnRef = useRef<RelearnEntry[]>([]);
   const [relearnCount, setRelearnCount] = useState(0);
+
+  // Follow-up drill state
+  const [drill, setDrill] = useState<DrillState | null>(null);
+  const [drillAnswer, setDrillAnswer] = useState("");
   const [remaining, setRemaining] = useState<{
     review: number;
     new: number;
@@ -314,6 +340,8 @@ export function FlashcardArena({
     setTally(EMPTY_TALLY);
     relearnRef.current = [];
     setRelearnCount(0);
+    setDrill(null);
+    setDrillAnswer("");
     if (mode === "practice") {
       loadPracticeDeck();
     } else {
@@ -411,7 +439,28 @@ export function FlashcardArena({
           setRelearnCount(relearnRef.current.length);
         }
 
-        await loadNextReviewCard();
+        // Occasionally drill a follow-up after a confident answer
+        const followUps = currentCard.question.followUpQuestions;
+        if (
+          quality >= QUALITY_BUTTONS.GOOD &&
+          followUps.length > 0 &&
+          Math.random() < DRILL_CHANCE
+        ) {
+          const followUpIndex = Math.floor(Math.random() * followUps.length);
+          setDrill({
+            question: currentCard.question,
+            followUp: followUps[followUpIndex],
+            followUpIndex,
+            phase: "answering",
+          });
+          setDrillAnswer("");
+          // Restart the soft timer for the drill question
+          setIsFlipped(false);
+          setRevealedAt(null);
+          setStartTime(Date.now());
+        } else {
+          await loadNextReviewCard();
+        }
       } catch (err) {
         setError("Failed to save answer. Please try again.");
         console.error(err);
@@ -421,6 +470,41 @@ export function FlashcardArena({
     },
     [mode, currentCard, isSubmitting, isFlipped, startTime, loadNextReviewCard],
   );
+
+  const finishDrill = useCallback(() => {
+    setDrill(null);
+    setDrillAnswer("");
+    loadNextReviewCard();
+  }, [loadNextReviewCard]);
+
+  const handleDrillSubmit = useCallback(async () => {
+    const trimmed = drillAnswer.trim();
+    if (!drill || drill.phase !== "answering" || !trimmed) return;
+
+    setDrill({ ...drill, phase: "grading" });
+    setRevealedAt(Date.now());
+    try {
+      const result = await evaluateFollowUpAnswer(
+        drill.question.id as string,
+        drill.followUpIndex,
+        trimmed,
+      );
+      setDrill((prev) =>
+        prev && prev.phase === "grading"
+          ? result.success
+            ? { ...prev, phase: "done", evaluation: result.data }
+            : { ...prev, phase: "error", error: result.error }
+          : prev,
+      );
+    } catch (err) {
+      console.error(err);
+      setDrill((prev) =>
+        prev && prev.phase === "grading"
+          ? { ...prev, phase: "error", error: "AI grading failed" }
+          : prev,
+      );
+    }
+  }, [drill, drillAnswer]);
 
   const handlePracticeNext = useCallback(() => {
     if (mode !== "practice" || !isFlipped) return;
@@ -461,6 +545,8 @@ export function FlashcardArena({
     setTally(EMPTY_TALLY);
     relearnRef.current = [];
     setRelearnCount(0);
+    setDrill(null);
+    setDrillAnswer("");
     if (mode === "practice") {
       loadPracticeDeck();
     } else {
@@ -482,6 +568,19 @@ export function FlashcardArena({
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Follow-up drill owns the keyboard while active
+      if (drill) {
+        if (
+          (drill.phase === "done" || drill.phase === "error") &&
+          e.key === "Enter"
+        ) {
+          e.preventDefault();
+          finishDrill();
+        }
+        return;
+      }
+
       if (sessionComplete || isLoading || isSubmitting) return;
 
       switch (e.key) {
@@ -531,6 +630,8 @@ export function FlashcardArena({
     isSubmitting,
     isFlipped,
     mode,
+    drill,
+    finishDrill,
     handleFlip,
     handleRating,
     handlePracticeNext,
@@ -647,6 +748,130 @@ export function FlashcardArena({
     mode === "review" && activeEval?.status === "done"
       ? activeEval.evaluation.suggestedRating
       : null;
+
+  // Follow-up drill interstitial (replaces the card until continued)
+  if (drill) {
+    const verdictColor: Record<FollowUpVerdict, string> = {
+      strong:
+        "text-green-600 border-green-300 dark:text-green-400 dark:border-green-900",
+      ok: "text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-900",
+      weak: "text-orange-600 border-orange-300 dark:text-orange-400 dark:border-orange-900",
+    };
+    return (
+      <div className="max-w-2xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              <CornerDownRight className="w-3 h-3 mr-1" />
+              Follow-up drill
+            </Badge>
+            <span
+              className={`flex items-center gap-1 font-mono tabular-nums text-xs transition-colors ${timerColor}`}
+            >
+              <Timer className="w-3.5 h-3.5" />
+              {formatElapsed(elapsedSeconds)}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            No rating — pure depth practice
+          </p>
+        </div>
+
+        <Card className="overflow-hidden shadow-md mb-6">
+          <div className="h-1 bg-brand-gradient" aria-hidden />
+          <CardContent className="p-6">
+            <p className="text-xs text-muted-foreground mb-3 line-clamp-1">
+              After: {drill.question.question}
+            </p>
+            <Separator className="mb-4" />
+            <h2 className="text-lg font-medium leading-relaxed mb-4">
+              {drill.followUp}
+            </h2>
+
+            {(drill.phase === "answering" || drill.phase === "grading") && (
+              <>
+                <textarea
+                  autoFocus
+                  value={drillAnswer}
+                  onChange={(e) => setDrillAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleDrillSubmit();
+                    }
+                  }}
+                  placeholder="Answer the follow-up from memory... (Enter to grade)"
+                  rows={4}
+                  disabled={drill.phase === "grading"}
+                  className="w-full p-3 rounded-lg border bg-background resize-none text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <div className="flex items-center justify-between mt-3">
+                  <button
+                    onClick={finishDrill}
+                    disabled={drill.phase === "grading"}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    Skip
+                  </button>
+                  {drill.phase === "grading" ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Grading...
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={handleDrillSubmit}
+                      disabled={!drillAnswer.trim()}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                      Grade my answer
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {drill.phase === "done" && (
+              <>
+                <div className="rounded-lg border bg-secondary/30 p-3 mb-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      AI Verdict
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs capitalize ml-auto ${verdictColor[drill.evaluation.verdict]}`}
+                    >
+                      {drill.evaluation.verdict}
+                    </Badge>
+                  </div>
+                  <p className="text-sm leading-relaxed">
+                    {drill.evaluation.feedback}
+                  </p>
+                </div>
+                <Button className="w-full" onClick={finishDrill}>
+                  Continue <span className="kbd ml-2">Enter</span>
+                </Button>
+              </>
+            )}
+
+            {drill.phase === "error" && (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {drill.error} — no rating recorded, moving on.
+                </p>
+                <Button className="w-full" onClick={finishDrill}>
+                  Continue <span className="kbd ml-2">Enter</span>
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4">

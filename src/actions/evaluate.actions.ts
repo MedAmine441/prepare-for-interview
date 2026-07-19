@@ -177,6 +177,127 @@ Rating rubric: "again" = fundamentally wrong or off-topic; "hard" = big gaps, un
   }
 }
 
+export type FollowUpVerdict = "strong" | "ok" | "weak";
+
+export interface FollowUpEvaluation {
+  /** 1-2 sentences: what's right, what's missing */
+  feedback: string;
+  verdict: FollowUpVerdict;
+}
+
+const FollowUpEvaluationSchema = z.object({
+  feedback: z.string().min(3).max(600),
+  verdict: z.enum(["strong", "ok", "weak"]),
+});
+
+const FollowUpInputSchema = z.object({
+  questionId: z.string().min(1),
+  followUpIndex: z.number().int().min(0),
+  typedAnswer: z.string().min(1).max(8000),
+});
+
+/**
+ * Grade an answer to one of a question's stored follow-up questions.
+ * Follow-ups have no keyPoints of their own, so the parent question's
+ * reference material anchors the judgment.
+ */
+export async function evaluateFollowUpAnswer(
+  questionId: string,
+  followUpIndex: number,
+  typedAnswer: string,
+): Promise<ActionResult<FollowUpEvaluation>> {
+  try {
+    const input = FollowUpInputSchema.safeParse({
+      questionId,
+      followUpIndex,
+      typedAnswer,
+    });
+    if (!input.success) {
+      return { success: false, error: "Nothing to grade — type an answer first" };
+    }
+
+    if (!KIMI_API_KEY) {
+      return { success: false, error: "KIMI_API_KEY not configured" };
+    }
+
+    const question = await questionRepository.findById(
+      createQuestionId(questionId),
+    );
+    const followUp = question?.followUpQuestions[input.data.followUpIndex];
+    if (!question || !followUp) {
+      return { success: false, error: "Follow-up question not found" };
+    }
+
+    const prompt = `You are a frontend interviewer evaluating a candidate's answer to a follow-up question.
+
+## Original question (the candidate already answered this)
+${question.question}
+
+## Reference material for the original question
+Key points: ${question.keyPoints.join("; ")}
+
+Model answer:
+${question.answer}
+
+## The follow-up question you asked
+${followUp}
+
+## Candidate's answer to the follow-up
+"""
+${input.data.typedAnswer}
+"""
+
+Judge ONLY the follow-up answer. Grade on meaning, not wording — accept shorthand and code fragments.
+
+Respond with ONLY a JSON object (no markdown fences, no commentary):
+{
+  "feedback": "1-2 sentences: what's right, then the most important thing missing or wrong",
+  "verdict": "strong|ok|weak"
+}
+
+Verdict rubric: "strong" = correct and covers the substance; "ok" = right direction with real gaps; "weak" = wrong, off-topic, or empty of substance.`;
+
+    const response = await fetchWithRetry(`${KIMI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: KIMI_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 4096,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!response.ok) {
+      console.error("Kimi follow-up evaluation error:", await response.text());
+      return { success: false, error: "AI grading failed" };
+    }
+
+    const data = await response.json();
+    const content: string = data.choices?.[0]?.message?.content || "";
+    const validated = FollowUpEvaluationSchema.safeParse(
+      extractJsonObject(content),
+    );
+    if (!validated.success) {
+      console.error("Unparseable follow-up evaluation:", content.slice(0, 1000));
+      return { success: false, error: "AI grading failed" };
+    }
+
+    return { success: true, data: validated.data };
+  } catch (error) {
+    console.error("Error evaluating follow-up:", error);
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    return {
+      success: false,
+      error: timedOut ? "AI grading timed out" : "AI grading failed",
+    };
+  }
+}
+
 /** Retry once on transient network errors (connect timeouts etc.) */
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
   try {
